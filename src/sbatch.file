@@ -6,10 +6,10 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=1
 #SBATCH --time=00:05:00
-#SBATCH --job-name=test
-#SBATCH --output=test-%j.out
-#SBATCH --error=test-%j.err
+#SBATCH --job-name=gpu-computing-assignment
+#SBATCH --output=result-%j.out
+#SBATCH --error=result-%j.err
 
 module load CUDA
 
-srun ./build/output.exec ../dataset/LeGresley_4908.mtx
+srun ./build/output.exec ../dataset/mawi_201512020330.mtx
