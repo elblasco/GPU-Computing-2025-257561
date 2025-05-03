@@ -6,7 +6,7 @@
 
 double* pre_filled_array(size_t size, double value);
 std::tuple<size_t*, size_t*, double*, size_t, size_t, size_t> get_COO(const char* file_name);
-void array_to_file(const char *file_name, double *array, size_t rows);
+void array_to_stdout(double *array, size_t rows);
 __global__ void coo_spmv_kernel(const size_t *row, const size_t *col, const double *val, const double *arr, double *res, size_t nonzeroelem);
 
 int main(int argc, char** argv) {
@@ -30,7 +30,7 @@ int main(int argc, char** argv) {
 
   cudaDeviceSynchronize();
   
-  array_to_file(argv[2], resulting_array, rows);
+  array_to_stdout(resulting_array, rows);
   
   cudaFree(row_indices);
   cudaFree(col_indices);
@@ -94,20 +94,14 @@ std::tuple<size_t*, size_t*, double*, size_t, size_t, size_t> get_COO(const char
   return {row_indices, col_indices, vals, rows, cols, nonzero_vals};
 }
 
-void array_to_file(const char *file_name, double* array, size_t rows) {
-  std::ofstream out_file(file_name);
-  if (!out_file) {
-        std::cerr << "Error opening file: " << file_name << std::endl;
-        return;
-  }
+void array_to_stdout(double* array, size_t rows) {
+  std::cout << "This is the encoding of the result" << std::endl;
+  std::cout << "The first line is the number of rows" << std::endl;
+  std::cout << "Each line is a cell of the array" << std::endl;
   
-  out_file << "This is the encoding of the result\n";
-  out_file << "The first line is the number of rows\n";
-  out_file << "Each line is a cell of the array\n";
-  
-  out_file << rows << "\n";
+  std::cout << rows << std::endl;
   
   for (size_t row = 0; row < rows; ++row) {
-	out_file << array[row] << "\n";
+    std::cout << array[row] << std::endl;
   }
 }
