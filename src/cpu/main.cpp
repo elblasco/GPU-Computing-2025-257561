@@ -1,17 +1,25 @@
-#include "parser.h"
+#include "enc-dec.h"
 #include <cstddef>
 #include <iostream>
 
 double* pre_filled_array(size_t size, double value);
 
-int main(void) {
-  auto [row_indices, col_indices, vals, rows, cols, non_zero_count] = get_COO("../dataset/bcsstm09.mtx");
+int main(int argc, char** argv) {
+  if(argc != 3){
+	std::cout << "Usage output.exec <matrix-file>" << std::endl;
+	return 1;
+  }
+  auto [row_indices, col_indices, vals, rows, cols, non_zero_count] = get_COO(argv[1]);
   double* array1 = pre_filled_array(cols, 1.0f);
   double* resulting_array = pre_filled_array(rows, 0);
   
   for(size_t COO_index = 0; COO_index < non_zero_count; ++COO_index){
 	resulting_array[row_indices[COO_index]] += (vals[COO_index] * array1[row_indices[COO_index]]);
   }
+
+  std::cout << "Sto salvando l'array su file" << std::endl;
+  
+  array_to_file(argv[2], resulting_array, rows);
   
   delete [] row_indices;
   delete [] col_indices;
