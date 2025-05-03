@@ -10,7 +10,7 @@ void array_to_stdout(double *array, size_t rows);
 __global__ void coo_spmv_kernel(const size_t *row, const size_t *col, const double *val, const double *arr, double *res, size_t nonzeroelem);
 
 int main(int argc, char** argv) {
-  if(argc != 3){
+  if(argc != 2){
 	std::cout << "Usage output.exec <matrix-file>" << std::endl;
 	return 1;
   }
