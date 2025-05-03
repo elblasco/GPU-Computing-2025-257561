@@ -6,7 +6,7 @@
 #include <tuple>
 #include <sstream>
 
-std::tuple<size_t*, size_t*, double*, size_t, size_t, size_t> get_COO(char* file_name) {
+std::tuple<size_t*, size_t*, double*, size_t, size_t, size_t> get_COO(const char* file_name) {
   std::ifstream MyFile(file_name);
   std::string line;
   // Skip header/comments
@@ -38,4 +38,22 @@ std::tuple<size_t*, size_t*, double*, size_t, size_t, size_t> get_COO(char* file
   
   MyFile.close();
   return {row_indices, col_indices, vals, rows, cols, nonzero_vals};
+}
+
+void array_to_file(const char *file_name, double* array, size_t rows) {
+  std::ofstream out_file(file_name);
+  if (!out_file) {
+        std::cerr << "Error opening file: " << file_name << std::endl;
+        return;
+  }
+  
+  out_file << "This is the encoding of the result\n";
+  out_file << "The first line is the number of rows\n";
+  out_file << "Each line is a cell of the array\n";
+  
+  out_file << rows << "\n";
+  
+  for (size_t row = 0; row < rows; ++row) {
+	out_file << array[row] << "\n";
+  }
 }
