@@ -12,4 +12,4 @@
 
 module load CUDA
 
-srun ./build/output.exec ../dataset/LeGresley_4908.mtx output.txt
+srun ./build/output.exec ../dataset/LeGresley_4908.mtx
