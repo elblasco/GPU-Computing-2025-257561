@@ -7,7 +7,7 @@
 double* pre_filled_array(size_t size, double value);
 std::tuple<size_t*, size_t*, double*, size_t, size_t, size_t> get_COO(const char* file_name);
 void array_to_file(const char *file_name, double *array, size_t rows);
-__global__ void coo_spmv_kernel(const double *row, const double *col, const double *val, const double *arr, double *res, size_t nonzeroelem);
+__global__ void coo_spmv_kernel(const size_t *row, const size_t *col, const double *val, const double *arr, double *res, size_t nonzeroelem);
 
 int main(int argc, char** argv) {
   if(argc != 3){
