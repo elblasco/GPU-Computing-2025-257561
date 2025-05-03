@@ -26,7 +26,7 @@ int main(int argc, char** argv) {
   // resulting_array[row_indices[COO_index]] += (vals[COO_index] * array1[row_indices[COO_index]]);
   // }
   ////
-  coo_spmv_kernel<<<gridSize, blockSize>>>(rows, col_indices, vals, array1, resulting_array, non_zero_count);
+  coo_spmv_kernel<<<gridSize, blockSize>>>(row_indices, col_indices, vals, array1, resulting_array, non_zero_count);
 
   cudaDeviceSynchronize();
   
@@ -40,7 +40,7 @@ int main(int argc, char** argv) {
   return 0;
 }
 
-__global__ void coo_spmv_kernel(const double *row, const double *col, const double *val, const double *arr, double *res, size_t nonzeroelem) {
+__global__ void coo_spmv_kernel(const size_t *row, const size_t *col, const double *val, const double *arr, double *res, size_t nonzeroelem) {
     int i = blockDim.x * blockIdx.x + threadIdx.x;
     if (i < nonzeroelem) {
         int r = row[i];
