@@ -2,12 +2,12 @@ STD:=-std=c++17
 OUTPUT:=-o build/output.exec
 OPT:=-O3
 FLAGS:=-Wall $(STD) $(OPT) $(OUTPUT)
-
+GFLAGS:=--gpu-architecture=sm_80 -O3 $(OUTPUT) $(STD)
 gpu: clean gpu-build
 
 gpu-build: ./gpu/main.cu
 	mkdir build
-	nvcc --gpu-architecture=sm_80 $(OUTPUT) $^
+	nvcc $(GFLAGS) $^
 
 cpu: clean cpu-build
 
