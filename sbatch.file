@@ -7,9 +7,9 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --time=00:05:00
 #SBATCH --job-name=gpu-computing-assignment
-#SBATCH --output=result-%j.out
-#SBATCH --error=result-%j.err
+#SBATCH --output=stdout.txt
+#SBATCH --error=stderr.txt
 
 module load CUDA
 
-srun ./build/output.exec
+srun ./build/output.exec ./dataset/delaunay_n23.mtx
