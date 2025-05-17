@@ -10,7 +10,7 @@
 #define NUM_TYPE float
 #define NUM_TEST 10
 #define OPS_PER_NUN 2
-#define MEMEORY_RW 5
+#define MEMEORY_RW 4
 // CUDA error checking
 #define cudaCheckError(ans)												\
   {																		\
@@ -87,8 +87,7 @@ __global__ void spmv_with_striding(const IDX_TYPE *row, const IDX_TYPE *col,
   IDX_TYPE end = nnz;
 
   for(IDX_TYPE i = start; i < end; i += n_thread){
-	IDX_TYPE row_idx = row[i];
-	atomicAdd(&res[row_idx], val[row_idx] * arr[col[i]]);
+	atomicAdd(&res[row[i]], val[i] * arr[col[i]]);
   }
 }
 
@@ -106,8 +105,7 @@ __global__ void spmv_without_striding(const IDX_TYPE *row, const IDX_TYPE *col,
   IDX_TYPE end = (nnz < portion * (thread_idx + 1))? nnz : portion * (thread_idx + 1);
   
   for(IDX_TYPE i = start; i < end; i++){
-	IDX_TYPE row_idx = row[i];
-	atomicAdd(&res[row_idx], val[row_idx] * arr[col[i]]);
+	atomicAdd(&res[row[i]], val[i] * arr[col[i]]);
   }
 }
 
@@ -164,14 +162,12 @@ void test_spmv(gpu_kernel kernel, const IDX_TYPE *row_indices,
   cudaCheckError(cudaEventCreate(&start));
   cudaCheckError(cudaEventCreate(&stop));
 
-  NUM_TYPE *resulting_array = pre_filled_array(num_rows, 0);
+  NUM_TYPE *resulting_array;
 
   size_t gridSize = (nnz + BLOCK_SIZE - 1) / BLOCK_SIZE;
-
-  printf("Number of thread invocked %lu for a total of %lu nnz\n", BLOCK_SIZE * gridSize, nnz);
   
   for (size_t i = 0; i < NUM_TEST; ++i) {
-
+	resulting_array = pre_filled_array(num_rows, 0);
     cudaCheckError(cudaEventRecord(start));
     kernel<<<gridSize, BLOCK_SIZE>>>(row_indices, col_indices, val, arr, resulting_array, nnz);
     cudaCheckError(cudaEventRecord(stop));
@@ -186,14 +182,9 @@ void test_spmv(gpu_kernel kernel, const IDX_TYPE *row_indices,
 	bandwidth[i] = (nnz * sizeof(NUM_TYPE) * MEMEORY_RW / milliseconds) / 1e12;
 	
 	printf("Run %lu developed %lf GFLOP/s in %lf ms with a dandwidth of %lf GB/s against a limit of 933 GB/s\n", i, flops[i], times[i], bandwidth[i]);
-	
-  }
-  
-  for(size_t i = 0; i < num_rows; ++i){
-	printf("result[%lu] = %lf\n", i, resulting_array[i]);
-  }
 
-  cudaCheckError(cudaFree(resulting_array));
+	cudaCheckError(cudaFree(resulting_array));
+  }
   
   double flops_mu = mu_fn(flops, NUM_TEST);
   double flops_sigma = sigma_fn(flops, flops_mu, NUM_TEST);

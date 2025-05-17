@@ -16,10 +16,9 @@ std::tuple<IDX_TYPE*, IDX_TYPE*, NUM_TYPE*, IDX_TYPE, IDX_TYPE, IDX_TYPE> get_CO
 double flops_counter(size_t nnz, float ms);
 double mu_fn(double* v, size_t n);
 double sigma_fn(double* v, double mu, size_t n);
-void test_spmv_cpu(const IDX_TYPE *row_indices,
-				   const IDX_TYPE *col_indices, const NUM_TYPE *val,
-				   const NUM_TYPE *arr, const IDX_TYPE num_rows,
-				   const NUM_TYPE *test_res, const size_t nnz);
+void test_spmv_cpu(const IDX_TYPE *row_indices, const IDX_TYPE *col_indices,
+                   const NUM_TYPE *val, const NUM_TYPE *arr,
+                   const IDX_TYPE num_rows, const size_t nnz);
 
 int main(int argc, char** argv) {
 
@@ -31,15 +30,13 @@ int main(int argc, char** argv) {
   auto [row_indices, col_indices, vals, rows, cols, non_zero_count] = get_COO(argv[1]);
 
   NUM_TYPE* array1 = pre_filled_array(cols, 1.0f);
-  NUM_TYPE* resulting_array = pre_filled_array(rows, 0);
   
-  test_spmv_cpu(row_indices, col_indices, vals,array1, rows, resulting_array, non_zero_count);
+  test_spmv_cpu(row_indices, col_indices, vals,array1, rows, non_zero_count);
   
   delete [] row_indices;
   delete [] col_indices;
   delete [] vals;
   delete [] array1;
-  delete [] resulting_array;
   return 0;
 }
 
@@ -104,17 +101,16 @@ double flops_counter(size_t nnz, float ms) {
   return (flops / (ms / 1.e3)) / 1.e19;
 }
 
-void test_spmv_cpu(const IDX_TYPE *row_indices,
-                           const IDX_TYPE *col_indices, const NUM_TYPE *val,
-                           const NUM_TYPE *arr, const IDX_TYPE num_rows,
-                           const NUM_TYPE *test_res, const size_t nnz) {
-  printf("###### 1 thread per 1 element kernel ######\n");
+void test_spmv_cpu(const IDX_TYPE *row_indices, const IDX_TYPE *col_indices,
+                   const NUM_TYPE *val, const NUM_TYPE *arr,
+                   const IDX_TYPE num_rows, const size_t nnz) {
+  printf("###### CPU SPMV ######\n");
   double times[NUM_TEST];
   double flops[NUM_TEST];
-  NUM_TYPE *resulting_array = pre_filled_array(num_rows, 1);
+  NUM_TYPE *resulting_array;
   
   for (size_t i = 0; i < NUM_TEST; ++i) {
-	
+	resulting_array = pre_filled_array(num_rows, 0);
     auto start = std::chrono::system_clock::now();
 	
 	for(size_t COO_index = 0; COO_index < nnz; ++COO_index){
@@ -126,13 +122,10 @@ void test_spmv_cpu(const IDX_TYPE *row_indices,
     double elapsed_ms = (end-start).count() * 1e3;
 	flops[i] = flops_counter(nnz, elapsed_ms);
 	times[i] = elapsed_ms;
+
+	delete[] resulting_array;
   }
 
-  for(size_t i = 0; i < num_rows; ++i){
-	printf("result[%lu] = %lf\n", i, resulting_array[i]);
-  }
-  
-  delete[] resulting_array;
   double flops_mu = mu_fn(flops, NUM_TEST);
   double flops_sigma = sigma_fn(flops, flops_mu, NUM_TEST);
   
