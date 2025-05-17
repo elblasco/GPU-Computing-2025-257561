@@ -179,6 +179,9 @@ void test_spmv(gpu_kernel kernel, const IDX_TYPE *row_indices,
 
     flops[i] = flops_counter(nnz, milliseconds);
     times[i] = milliseconds;
+
+	printf("Run %lu developed %lf GLOPS in %lf ms\n", i, flops[i], times[i]);
+	
   }
 
   cudaCheckError(cudaFree(resulting_array));
