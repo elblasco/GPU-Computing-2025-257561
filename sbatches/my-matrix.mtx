@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+#SBATCH --partition=edu-short
+#SBATCH --nodes=1
+#SBATCH --nodelist=edu01
+#SBATCH --tasks=1
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=1
+#SBATCH --time=00:05:00
+#SBATCH --job-name=my-matrix
+#SBATCH --output=stdout-my-matrix.txt
+#SBATCH --error=stderr-my-matrix.txt
+
+module load CUDA
+
+srun ./build/gpu-output.exec ./dataset/my-matrix.mtx
+srun ./build/cpu-output.exec ./dataset/my-matrix.mtx
