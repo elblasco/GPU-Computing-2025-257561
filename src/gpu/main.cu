@@ -56,9 +56,11 @@ int main(int argc, char **argv) {
 
   NUM_TYPE *array_to_mul = pre_filled_array(ncols, 1.0f);
 
+  printf("###Kernel with styriding###\n");
   test_spmv(spmv_with_striding, row_indices, col_indices, vals, array_to_mul,
             nrows, nnz);
 
+  printf("###Kernel with sequantial access###\n");
   test_spmv(spmv_without_striding, row_indices, col_indices, vals, array_to_mul,
             nrows, nnz);
 
@@ -79,9 +81,7 @@ __global__ void spmv_with_striding(const IDX_TYPE *row, const IDX_TYPE *col,
                                     NUM_TYPE *res, const size_t nnz) {
   size_t thread_idx = blockDim.x * blockIdx.x + threadIdx.x;
   size_t n_thread = blockDim.x * gridDim.x;
-  if (thread_idx >= nnz)
-    return;
-
+  
   IDX_TYPE start = thread_idx;
   IDX_TYPE end = nnz;
 
@@ -103,9 +103,6 @@ __global__ void spmv_without_striding(const IDX_TYPE *row, const IDX_TYPE *col,
   
   IDX_TYPE start = portion * thread_idx;
   IDX_TYPE end = (nnz < portion * (thread_idx + 1))? nnz : portion * (thread_idx + 1);
-
-  if (start >= nnz)
-   return;
   
   for(IDX_TYPE i = start; i < end; i++){
 	IDX_TYPE row_idx = row[i];
