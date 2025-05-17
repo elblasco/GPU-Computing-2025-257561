@@ -119,8 +119,6 @@ void test_spmv_cpu(const IDX_TYPE *row_indices,
 	
 	for(size_t COO_index = 0; COO_index < nnz; ++COO_index){
 	  resulting_array[row_indices[COO_index]] += (val[COO_index] * arr[row_indices[COO_index]]);
-	  printf("result[%lu] = %f", COO_index, resulting_array[row_indices[COO_index]]);
-	  fflush(stdout);
 	}
 	
 	auto end = std::chrono::system_clock::now();
@@ -129,6 +127,11 @@ void test_spmv_cpu(const IDX_TYPE *row_indices,
 	flops[i] = flops_counter(nnz, elapsed_ms);
 	times[i] = elapsed_ms;
   }
+
+  for(size_t i = 0; i < num_rows; ++i){
+	printf("result[%lu] = %lf\n", i, resulting_array[i]);
+  }
+  
   delete[] resulting_array;
   double flops_mu = mu_fn(flops, NUM_TEST);
   double flops_sigma = sigma_fn(flops, flops_mu, NUM_TEST);
