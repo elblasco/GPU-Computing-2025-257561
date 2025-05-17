@@ -5,10 +5,12 @@
 #include <tuple>
 #include <filesystem>
 
-#define BLOCK_SIZE 1024
+#define BLOCK_SIZE 512
 #define IDX_TYPE size_t
 #define NUM_TYPE float
 #define NUM_TEST 10
+#define OPS_PER_NUN 2
+#define MEMEORY_RW 5
 // CUDA error checking
 #define cudaCheckError(ans)												\
   {																		\
@@ -55,7 +57,7 @@ int main(int argc, char **argv) {
 
   NUM_TYPE *array_to_mul = pre_filled_array(ncols, 1.0f);
 
-  printf("###Kernel with styriding###\n");
+  printf("###Kernel with striding###\n");
   test_spmv(spmv_with_striding, row_indices, col_indices, vals, array_to_mul,
             nrows, nnz);
 
@@ -71,7 +73,7 @@ int main(int argc, char **argv) {
 }
 
 double flops_counter(size_t nnz, float ms) {
-  size_t flops = 2 * nnz;
+  size_t flops = OPS_PER_NUN * nnz;
   return (flops / (ms / 1.e3)) / 1.e9;
 }
 
@@ -95,7 +97,7 @@ __global__ void spmv_without_striding(const IDX_TYPE *row, const IDX_TYPE *col,
                                  NUM_TYPE *res, const size_t nnz) {
   size_t thread_idx = blockDim.x * blockIdx.x + threadIdx.x;
   size_t n_thread = blockDim.x * gridDim.x;
-  float frac_portion = nnz / n_thread;
+  float frac_portion = (float)nnz / (float)n_thread;
 
   // Ceil function
   size_t portion = ((size_t)frac_portion) + (((size_t)frac_portion) < frac_portion);
@@ -156,6 +158,7 @@ void test_spmv(gpu_kernel kernel, const IDX_TYPE *row_indices,
                const NUM_TYPE *arr, const IDX_TYPE num_rows, const size_t nnz) {
   double times[NUM_TEST];
   double flops[NUM_TEST];
+  double bandwidth[NUM_TEST];
 
   cudaEvent_t start, stop;
   cudaCheckError(cudaEventCreate(&start));
@@ -164,6 +167,8 @@ void test_spmv(gpu_kernel kernel, const IDX_TYPE *row_indices,
   NUM_TYPE *resulting_array = pre_filled_array(num_rows, 0);
 
   size_t gridSize = (nnz + BLOCK_SIZE - 1) / BLOCK_SIZE;
+
+  printf("Number of thread invocked %lu for a total of %lu nnz\n", BLOCK_SIZE * gridSize, nnz);
   
   for (size_t i = 0; i < NUM_TEST; ++i) {
 
@@ -171,16 +176,21 @@ void test_spmv(gpu_kernel kernel, const IDX_TYPE *row_indices,
     kernel<<<gridSize, BLOCK_SIZE>>>(row_indices, col_indices, val, arr, resulting_array, nnz);
     cudaCheckError(cudaEventRecord(stop));
     cudaCheckError(cudaEventSynchronize(stop));
-    cudaCheckError(cudaDeviceSynchronize());
+    //cudaCheckError(cudaDeviceSynchronize());
 
     float milliseconds = 0;
     cudaCheckError(cudaEventElapsedTime(&milliseconds, start, stop));
 
     flops[i] = flops_counter(nnz, milliseconds);
     times[i] = milliseconds;
-
-	printf("Run %lu developed %lf GFLOPS in %lf ms\n", i, flops[i], times[i]);
+	bandwidth[i] = (nnz * sizeof(NUM_TYPE) * MEMEORY_RW / milliseconds) / 1e12;
 	
+	printf("Run %lu developed %lf GFLOP/s in %lf ms with a dandwidth of %lf GB/s against a limit of 933 GB/s\n", i, flops[i], times[i], bandwidth[i]);
+	
+  }
+  
+  for(size_t i = 0; i < num_rows; ++i){
+	printf("result[%lu] = %lf\n", i, resulting_array[i]);
   }
 
   cudaCheckError(cudaFree(resulting_array));
@@ -188,7 +198,7 @@ void test_spmv(gpu_kernel kernel, const IDX_TYPE *row_indices,
   double flops_mu = mu_fn(flops, NUM_TEST);
   double flops_sigma = sigma_fn(flops, flops_mu, NUM_TEST);
   
-  printf("This kernel produced an average of %lf GFLOPS with std.dev. of %lf GFLOPS\n", flops_mu, flops_sigma);
+  printf("This kernel produced an average of %lf GFLOP/s with std.dev. of %lf GFLOP/s\n", flops_mu, flops_sigma);
 
   double times_mu = mu_fn(times, NUM_TEST);
   double times_sigma = sigma_fn(times, times_mu, NUM_TEST);
