@@ -5,19 +5,20 @@ OPT:=-O0 -g
 FLAGS:=-Wall $(STD) $(OPT) $(CPU-OUTPUT)
 GFLAGS:=--gpu-architecture=sm_80 -m64 $(STD) $(GPU-OUTPUT)
 
-all: clean cpu-build gpu-build
+all: clean build-dir  cpu-build gpu-build
 
 gpu: clean gpu-build
 
 gpu-build: ./src/gpu/main.cu
-	mkdir build
 	nvcc $(GFLAGS) $^
 
 cpu: clean cpu-build
 
 cpu-build: ./src/cpu/main.cpp
-	mkdir build
 	g++ $(FLAGS) $^
 
 clean:
 	rm -rf build
+
+build-dir:
+	mkdir build	
