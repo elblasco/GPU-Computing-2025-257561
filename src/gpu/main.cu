@@ -5,15 +5,14 @@
 #include <tuple>
 #include <filesystem>
 
-#define ELEM_PER_THREAD 32
-#define BLOCK_SIZE 512
+#define BLOCK_SIZE 1024
 #define IDX_TYPE size_t
 #define NUM_TYPE float
 #define NUM_TEST 10
 // CUDA error checking
-#define cudaCheckError(ans)                                                    \
+#define cudaCheckError(ans)												\
   {																		\
-    gpuAssert((ans), __FILE__, __LINE__);                                      \
+    gpuAssert((ans), __FILE__, __LINE__);								\
   }
 
 typedef void (*gpu_kernel)(const IDX_TYPE *, const IDX_TYPE *, const NUM_TYPE *,
@@ -99,7 +98,7 @@ __global__ void spmv_without_striding(const IDX_TYPE *row, const IDX_TYPE *col,
   float frac_portion = nnz / n_thread;
 
   // Ceil function
-  size_t portion = (size_t)frac_portion + ((size_t)frac_portion < frac_portion);
+  size_t portion = ((size_t)frac_portion) + (((size_t)frac_portion) < frac_portion);
   
   IDX_TYPE start = portion * thread_idx;
   IDX_TYPE end = (nnz < portion * (thread_idx + 1))? nnz : portion * (thread_idx + 1);
@@ -164,12 +163,12 @@ void test_spmv(gpu_kernel kernel, const IDX_TYPE *row_indices,
 
   NUM_TYPE *resulting_array = pre_filled_array(num_rows, 0);
 
-  size_t gridSizeNNZ = (nnz + BLOCK_SIZE - 1) / BLOCK_SIZE;
+  size_t gridSize = (nnz + BLOCK_SIZE - 1) / BLOCK_SIZE;
   
   for (size_t i = 0; i < NUM_TEST; ++i) {
 
     cudaCheckError(cudaEventRecord(start));
-    kernel<<<gridSizeNNZ, BLOCK_SIZE>>>(row_indices, col_indices, val, arr, resulting_array, nnz);
+    kernel<<<gridSize, BLOCK_SIZE>>>(row_indices, col_indices, val, arr, resulting_array, nnz);
     cudaCheckError(cudaEventRecord(stop));
     cudaCheckError(cudaEventSynchronize(stop));
     cudaCheckError(cudaDeviceSynchronize());
@@ -180,7 +179,7 @@ void test_spmv(gpu_kernel kernel, const IDX_TYPE *row_indices,
     flops[i] = flops_counter(nnz, milliseconds);
     times[i] = milliseconds;
 
-	printf("Run %lu developed %lf GLOPS in %lf ms\n", i, flops[i], times[i]);
+	printf("Run %lu developed %lf GFLOPS in %lf ms\n", i, flops[i], times[i]);
 	
   }
 
