@@ -1,8 +1,9 @@
 STD:=-std=c++17
-OUTPUT:=-o build/output.exec
+GPU-OUTPUT:=-o build/gpu-output.exec
+CPU-OUTPUT:=-o build/cpu-output.exec
 OPT:=-O0 -g
-FLAGS:=-Wall $(STD) $(OPT) $(OUTPUT)
-GFLAGS:=--gpu-architecture=sm_80 -m64 $(OUTPUT) $(STD)
+FLAGS:=-Wall $(STD) $(OPT) $(CPU-OUTPUT)
+GFLAGS:=--gpu-architecture=sm_80 -m64 $(STD) $(GPU-OUTPUT)
 gpu: clean gpu-build
 
 gpu-build: ./src/gpu/main.cu
