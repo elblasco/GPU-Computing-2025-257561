@@ -4,6 +4,9 @@ CPU-OUTPUT:=-o build/cpu-output.exec
 OPT:=-O0 -g
 FLAGS:=-Wall $(STD) $(OPT) $(CPU-OUTPUT)
 GFLAGS:=--gpu-architecture=sm_80 -m64 $(STD) $(GPU-OUTPUT)
+
+all: clean cpu-build gpu-build
+
 gpu: clean gpu-build
 
 gpu-build: ./src/gpu/main.cu
