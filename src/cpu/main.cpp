@@ -7,7 +7,6 @@
 #include <chrono>
 #include <ctime>
 
-#define BLOCK_SIZE 512
 #define IDX_TYPE size_t
 #define NUM_TYPE float
 #define NUM_TEST 10
@@ -34,7 +33,7 @@ int main(int argc, char** argv) {
   NUM_TYPE* array1 = pre_filled_array(cols, 1.0f);
   NUM_TYPE* resulting_array = pre_filled_array(rows, 0);
   
-  
+  test_spmv_cpu(row_indices, col_indices, vals,array1, rows, resulting_array, non_zero_count);
   
   delete [] row_indices;
   delete [] col_indices;
@@ -102,7 +101,7 @@ double sigma_fn(double* v, double mu, size_t n){
 
 double flops_counter(size_t nnz, float ms) {
   size_t flops = 2 * nnz;
-  return (flops / (ms / 1.e3)) / 1.e12;
+  return (flops / (ms / 1.e3)) / 1.e19;
 }
 
 void test_spmv_cpu(const IDX_TYPE *row_indices,
@@ -112,28 +111,29 @@ void test_spmv_cpu(const IDX_TYPE *row_indices,
   printf("###### 1 thread per 1 element kernel ######\n");
   double times[NUM_TEST];
   double flops[NUM_TEST];
-
+  NUM_TYPE *resulting_array = pre_filled_array(num_rows, 1);
   
   for (size_t i = 0; i < NUM_TEST; ++i) {
-    NUM_TYPE *resulting_array = pre_filled_array(num_rows, 0);
 	
     auto start = std::chrono::system_clock::now();
 	
 	for(size_t COO_index = 0; COO_index < nnz; ++COO_index){
 	  resulting_array[row_indices[COO_index]] += (val[COO_index] * arr[row_indices[COO_index]]);
+	  printf("result[%lu] = %f", COO_index, resulting_array[row_indices[COO_index]]);
+	  fflush(stdout);
 	}
-
+	
 	auto end = std::chrono::system_clock::now();
-
+	
     double elapsed_ms = (end-start).count() * 1e3;
 	flops[i] = flops_counter(nnz, elapsed_ms);
 	times[i] = elapsed_ms;
   }
-
+  delete[] resulting_array;
   double flops_mu = mu_fn(flops, NUM_TEST);
   double flops_sigma = sigma_fn(flops, flops_mu, NUM_TEST);
   
-  printf("This kernel produced an average of %lf FLOPS with std.dev. of %lf FLOPS\n", flops_mu, flops_sigma);
+  printf("This kernel produced an average of %lf GFLOPS with std.dev. of %lf GFLOPS\n", flops_mu, flops_sigma);
 
   double times_mu = mu_fn(times, NUM_TEST);
   double times_sigma = sigma_fn(times, times_mu, NUM_TEST);
