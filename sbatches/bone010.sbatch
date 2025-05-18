@@ -7,10 +7,10 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=1
 #SBATCH --time=00:05:00
-#SBATCH --job-name=mycielskian17
-#SBATCH --output=stdout-mycielskian17.txt
-#SBATCH --error=stderr-mycielskian17.txt
+#SBATCH --job-name=bone010
+#SBATCH --output=stdout-bone010.txt
+#SBATCH --error=stderr-bone010.txt
 
 module load CUDA
 
-srun ./build/gpu-output.exec ./dataset/mycielskian17.mtx
+srun ./build/output.exec ./dataset/bone010.mtx

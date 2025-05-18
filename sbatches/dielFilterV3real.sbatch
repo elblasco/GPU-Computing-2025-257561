@@ -13,4 +13,4 @@
 
 module load CUDA
 
-srun ./build/gpu-output.exec ./dataset/dielFilterV3real.mtx
+srun ./build/output.exec ./dataset/dielFilterV3real.mtx

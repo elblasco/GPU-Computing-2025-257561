@@ -13,4 +13,4 @@
 
 module load CUDA
 
-srun ./build/gpu-output.exec ./dataset/nlpkkt160.mtx
+srun ./build/output.exec ./dataset/nlpkkt160.mtx

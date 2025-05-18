@@ -13,4 +13,4 @@
 
 module load CUDA
 
-srun ./build/gpu-output.exec ./dataset/mawi_201512020330.mtx
+srun ./build/output.exec ./dataset/mawi_201512020330.mtx
