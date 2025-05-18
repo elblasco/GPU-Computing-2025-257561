@@ -5,7 +5,7 @@
 #include <cuda_runtime.h>
 #include <cuda_runtime_api.h>
 
-#define MAX_BLOCK_SIZE 1024
+#define MAX_BLOCK_SIZE 512
 #define MAX_GRID_SIZE 256
 #define IDX_TYPE size_t
 #define NUM_TYPE double

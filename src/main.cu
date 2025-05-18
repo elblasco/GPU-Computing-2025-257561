@@ -1,7 +1,7 @@
 #include <filesystem>
 
 #include "include/gpu.h"
-#include "include/tester.h"
+#include "include/testers.h"
 #include "include/utils.h"
 
 int main(int argc, char **argv) {
