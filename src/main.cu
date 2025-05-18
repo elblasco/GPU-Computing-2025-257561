@@ -35,16 +35,6 @@ int main(int argc, char **argv) {
       test_spmv_gpu(spmv_without_striding, row_indices, col_indices, vals,
                     array_to_mul_gpu, nrows, nnz);
 
-  for (size_t i = 0; i < nrows; ++i) {
-    if (std::abs(cpu_result[i] - strinding_result[i]) > 0.001 ||
-        std::abs(cpu_result[i] - sequantial_result[i]) > 0.001) {
-      printf("At index %lu\n", i);
-      printf("The number computed via cpu is %lf, via striding %lf and via "
-             "sequantial %lf\n",
-             cpu_result[i], strinding_result[i], sequantial_result[i]);
-    }
-  }
-
   delete[] cpu_result;
   delete[] array_to_mul_cpu;
   cudaCheckError(cudaFree(array_to_mul_gpu));

@@ -1,6 +1,7 @@
 #include <chrono>
 #include <ratio>
 #include <cmath>
+#include <thread>
 
 #include "include/cpu.h"
 #include "include/utils.h"
@@ -25,8 +26,6 @@ NUM_TYPE* test_spmv_cpu(const IDX_TYPE *row_indices, const IDX_TYPE *col_indices
     double elapsed_ms = duration_ms.count();
 	flops[i] = flops_counter(nnz, elapsed_ms);
 	times[i] = elapsed_ms;
-
-	printf("Run %lu developed %lf GFLOP/s in %lf ms\n", i, flops[i], times[i]);
 	
 	if(i < NUM_TEST - 1)
 	  delete[] resulting_array;
@@ -64,7 +63,7 @@ NUM_TYPE* test_spmv_gpu(gpu_kernel kernel, const IDX_TYPE *row_indices,
   size_t grid_size = std::min(possible_grid_size, (size_t)std::ceil(nnz / (float)MAX_BLOCK_SIZE));
   size_t block_size = std::min(possible_block_size, nnz);
 
-  size_t portion = std::ceil(nnz/ (block_size * grid_size));
+  size_t portion = std::ceil(nnz / (block_size * grid_size));
   printf("The kernl will be executed on %lu threads, eaach of them should cover at most %lu elements\n", (grid_size * block_size), portion);
 
   for (size_t i = 0; i < NUM_TEST; ++i) {
@@ -78,12 +77,13 @@ NUM_TYPE* test_spmv_gpu(gpu_kernel kernel, const IDX_TYPE *row_indices,
     float milliseconds = 0;
     cudaCheckError(cudaEventElapsedTime(&milliseconds, start, stop));
 
+	using namespace std::chrono_literals;
+	std::this_thread::sleep_for(10000ms);
+	
     flops[i] = flops_counter(nnz, milliseconds);
     times[i] = milliseconds;
 	bandwidth[i] = (nnz * sizeof(NUM_TYPE) * MEMEORY_RW / milliseconds) / 1e12;
 	
-	printf("Run %lu developed %lf GFLOP/s in %lf ms with a dandwidth of %lf GB/s against a limit of 933 GB/s\n", i, flops[i], times[i], bandwidth[i]);
-
 	if(i < NUM_TEST - 1)
 	  cudaCheckError(cudaFree(resulting_array));
   }
