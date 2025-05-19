@@ -15,6 +15,10 @@
 \usepackage{bm}
 \usepackage{hyperref}
 
+\usepackage{pgfplots}
+\pgfplotsset{compat=newest}
+\usepackage{siunitx}
+
 \usepackage{verbatim}
 \usepackage{multirow}
 
@@ -175,7 +179,7 @@ For the GPU implementation I have created two kernel, they differ on the access 
 \label{alg:contiguous}
 \end{algorithm}
 
-From the theory Algorithm~\ref{alg:striding} should have been faster. This follows from the fact that every thread within the same SM (Streaming Multiprocessor) accesses elements that are spacially adjacent in the memory. Contrary, Algorithm~\ref{alg:contiguous} has an higher rate of cache miss since, threads in the same SM may need to access elements far away from each other.
+From the theory Algorithm~\ref{alg:striding} should have been faster. This follows from the fact that every thread within the same SM (Streaming Multiprocessor) accesses elements that are spacially adjacent in the memory. Contrary, Algorithm~\ref{alg:contiguous} has an higher rate of cache miss since, threads in the same SM may need to access elements far away from each other. Since the cache optimisation is so important for these algorithm and they had to do so few floating point operations I expected for them to be memory bounded.
 
 \section{System Description and Experimental Set-up}
 
@@ -290,9 +294,76 @@ I decided to dig a bit more into the performances of Algorithm~\ref{alg:striding
 \item too much threads working on the same row, hence an high number of conflicts on the same row.
 \end{itemize}
 Unfortunately, I was not able to determine a more fine grain optimisation, since the optimal size depends on the input matrix shape. Figure~[\ref{fig:gflop-block},~\ref{fig:gb-block}] highlights the fact that the variations of performances are not constant over all the matrices considered.
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}
+\begin{loglogaxis}[
+    width=\linewidth,
+    height=7cm,
+    xlabel={Arithmetic Intensity [FLOPs/Byte]},
+    ylabel={Performance [GFLOPs]},
+    title={Roofline Model for NVIDIA A30 GPU (FP64)},
+    grid=both,
+    xmin=0.01, xmax=1000,
+    ymin=1, ymax=10000,
+    xtick={0.01, 0.1, 1, 10, 100, 1000},
+    ytick={1, 10, 100, 1000, 10000}
+]
+
+
+% --- Parameters ---
+\def\ridgepoint{5.57}     % FLOPs/Byte
+\def\peakcompute{5200}    % GFLOPs
+\def\bandwidth{933}       % GB/s
+\def\ArithmeticIntensity{0.05}
+\def\performance{46.65}
+
+% --- Roofline: Memory-bound and compute-bound ---
+\addplot[
+    domain=0.01:\ridgepoint,
+    samples=200,
+    thick,
+    orange
+] {\bandwidth * x}; % Memory-bound line
+
+\addplot[
+    domain=\ridgepoint:1000,
+    samples=2,
+    thick,
+    orange
+] {\peakcompute}; % Compute-bound line
+
+% --- Dashed Ridge point ---
+\addplot[dashed, red, thick] coordinates {(\ridgepoint, 1) (\ridgepoint, \peakcompute)};
+\node[red] at (axis cs:\ridgepoint + 7, 100) {Ridge Point};
+
+% --- Measured point ---
+\addplot[
+    only marks,
+    mark=*,
+    mark size=2pt,
+    color=blue
+] coordinates {(\ArithmeticIntensity, \performance)};
+\node[align=left, anchor=west, blue] at (axis cs:0.06, 70) {Measured\\AI=0.05, Perf=46.65};
+
+% --- Peak compute line (green dashed) ---
+\addplot[dashed, green!70!black, thick] coordinates {(0.01, \peakcompute) (1000, \peakcompute)};
+\node[anchor=south, green!50!black] at (axis cs:0.1, \peakcompute/2) {Peak Compute};
+
+% --- Annotations ---
+\node[blue] at (axis cs:0.15, 10) {Mem Bound Region};
+\node[blue] at (axis cs:100, \peakcompute) {Comp Bound Region};
+
+\end{loglogaxis}
+\end{tikzpicture}
+\caption{Roofline Model For SpMV On NVIDIA A30}
+\label{fig:roofline}
+\end{figure}
+
+Following the NVIDIA's white-paper for the A30, I drew the roofline model for double precision floating point, since in my code I used \texttt{double} as data type. Figure~\ref{fig:roofline} highlights the fact that my \emph{CUDA} kernels are indeed a memory bounded.
+
 \section{Conclusions}
-%[max 200 words]\\
-%Summarize findings and future work \dots
 The presented algorithms are far from decent implementations. The representation used for the matrices is sub-optimal since the length of a row is unknown a priori, therefore it is impossible to do a decent load balancing between the threads. For better GPU performances using another representation such as CSR would works better.
 
 Another bottleneck for the algorithm is represented by the use of an atomic instruction. Instead of this instruction thread/warp level synchronisation should be used.
