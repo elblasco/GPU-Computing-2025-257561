@@ -74,7 +74,7 @@ Starting from the implementations presented in this deliverable, performances co
 
 %Describe the methodology used during the analysis, the compared algorithms and the expected outcomes. Use pseudo-codes like Algorithm \ref{alg:COOaggr} to describe your own implemented kernels.
 
-The tests has been carried out performing multiple rounds of caches warm up and then executing the various algorithm after. The data have been collected throughout the execution since only for the first warm up cycle there were substantially data variations.
+The tests has been carried out performing multiple execution rounds. The data have been collected throughout the execution since only for the first warm up cycle there were substantially data variations.
 
 \subsection{CPU implementation}
 
@@ -257,7 +257,7 @@ To add a bit more of generality to the dataset I picked four matrix from four di
 
 \subsection{Experimental Set-up}
 %Explain the benchmark metrics and all the experimental set-up (warm-up cycles, number of performed runs\dots).
-I used 5 warm-up runs followed by 5 runs to collect data. I kept this set-up even though after few tests one warm-up round was enough to have stable values. Each job submitted to the cluster executed a full warm-up and run for Algorithm~\ref{alg:cpu}, then Algorithm~\ref{alg:striding} and then Algorithm~\ref{alg:contiguous}. 
+I used 5 warm-up runs followed by 5 runs to collect data. I kept this set-up even though after few tests one warm-up round was enough to have stable values, as a matter of fact I decided to keep all the data generated. Each job submitted to the cluster executed a full warm-up and run for Algorithm~\ref{alg:cpu}, then Algorithm~\ref{alg:striding} and then Algorithm~\ref{alg:contiguous}. 
 
 \section{Experimental Results}\label{sec:result}
 % Present and discuss results. Include plots and tables when required (like Figure \ref{fig:enter-label}). Do not simply describe the figures; criticise the achieved results by underlining how they confirm/differ from the expected outcomes described in Section \ref{sec:methodology}.
