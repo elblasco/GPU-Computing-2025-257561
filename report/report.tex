@@ -293,7 +293,11 @@ Unfortunately, I was not able to determine a more fine grain optimisation, since
 \section{Conclusions}
 %[max 200 words]\\
 %Summarize findings and future work \dots
+The presented algorithms are far from decent implementations. The representation used for the matrices is sub-optimal since the length of a row is unknown a priori, therefore it is impossible to do a decent load balancing between the threads. For better GPU performances using another representation such as CSR would works better.
 
+Another bottleneck for the algorithm is represented by the use of an atomic instruction. Instead of this instruction thread/warp level synchronisation should be used.
+
+On the CPU side, this representation is optimal since it permits to maximise the number of cache hits working on data stored so closely.
 
 \bibliographystyle{IEEEtran}
 \bibliography{references}
