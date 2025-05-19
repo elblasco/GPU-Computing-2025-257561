@@ -7,6 +7,7 @@ Please create a directory dataset and download (and extract) into it the follwoi
 + https://suitesparse-collection-website.herokuapp.com/MM/Dziekonski/dielFilterV3real.tar.gz
 + https://suitesparse-collection-website.herokuapp.com/MM/MAWI/mawi_201512020330.tar.gz
 + https://suitesparse-collection-website.herokuapp.com/MM/Schenk/nlpkkt160.tar.gz
+If in the archivese therew were multiple files extract and put in `dataset` only the file with the exact matrix's name.
 ## To Build It
 ```
 git clone https://github.com/elblasco/GPU-Computing-2025-257561.git
