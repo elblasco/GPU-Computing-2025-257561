@@ -58,10 +58,10 @@ The SpMV operation is formally defined in Equation~\ref{eq:1}, where \(\bm{A}\) 
 \end{equation}
 
 \subsection{Storage Format}
-The coordinate (COO) format is a representation of sparse matrix. COO uses three different arrays to store al the necessary information. One array dedicated to store all the non-zero values, while the other two contain the corresponding row and column indices. For the sake of simplicity, all the input matrices are assumed to be sorted in row-major order, this is done by transposing all the input matrices which were sorted in column-major order.
+The coordinate (COO) format is a representation of sparse matrix. COO uses 3 different arrays to store al the necessary information. One array dedicated to store all the non-zero values, while the other 2 contain the corresponding row and column indices. For the sake of simplicity, all the input matrices are assumed to be sorted in row-major order, this is done by transposing all the input matrices which were sorted in column-major order.
 
 \subsection{Parallelization}
-Two different kernels have been used for the \emph{CUDA} capable GPU, although in both of them the workload is divided equally among all the threads used. The main difference is the pattern used to access the global memory from a thread. In the first approach each thread jumps of stride equivalent to the number of threads used, while in the second approach a thread access to a continuos area of memory long as the total number of non-zero element in the matrix divided by the number of threads used.
+2 different kernels have been used for the \emph{CUDA} capable GPU, although in both of them the workload is divided equally among all the threads used. The main difference is the pattern used to access the global memory from a thread. In the first approach each thread jumps of stride equivalent to the number of threads used, while in the second approach a thread access to a continuos area of memory long as the total number of non-zero element in the matrix divided by the number of threads used.
 
 \section{State of the Art}
 %Describe the available library solutions for the SpMV problem, including references and citations \cite{asimov1950irobot, svevo1923coscienza, pirandello1926uno}.
@@ -109,7 +109,7 @@ In particular instance I had to use my personal computer since the cluster versi
   \centering
     \begin{tabular}{c|c c}
       \toprule
-      Matrix & D1 r miss & D1 w miss\\
+      Matrix & D1 read & D1 write\\
       \midrule
       \texttt{lp\_nug05} & 1.5\% & .5\%\\
       \texttt{rdb250l} & .8\% & .3\%\\
@@ -126,7 +126,7 @@ In particular instance I had to use my personal computer since the cluster versi
   \centering
     \begin{tabular}{c|c c}
       \toprule
-      Matrix & LLd r miss & LLd w miss\\
+      Matrix & LLd read & LLd write\\
       \midrule
       \texttt{lp\_nug05} & .7\% & .3\%\\
       \texttt{rdb250l} & .4\% & .2\%\\
@@ -175,14 +175,7 @@ For the GPU implementation I have created two kernel, they differ on the access 
 \label{alg:contiguous}
 \end{algorithm}
 
-\begin{figure}
-    \centering
-    \includegraphics[width=0.95\linewidth]{average-execution-time.png}
-    \caption{Average Execution Time}
-    \label{fig:avg-exec-time}
-\end{figure}
-
-As shown in Figure~\ref{fig:avg-exec-time} the fastest algorithm is algorithm~\ref{alg:striding}. This follows from the fact that every thread within the same SM (Streaming Multiprocessor) access elements that are spacially adjacent in the memory. Contrary, Algorithm~\ref{alg:contiguous} has an higher rate of cache miss since, threads in the same SM may need to access elements far away from each other. All the other results are shown and described in Section~\ref{sec:result}.
+From the theory Algorithm~\ref{alg:striding} should have been faster. This follows from the fact that every thread within the same SM (Streaming Multiprocessor) accesses elements that are spacially adjacent in the memory. Contrary, Algorithm~\ref{alg:contiguous} has an higher rate of cache miss since, threads in the same SM may need to access elements far away from each other.
 
 \section{System Description and Experimental Set-up}
 
@@ -232,7 +225,7 @@ Table~\ref{tab:systems_softwares} shows the various software used in the deliver
 
 %Discribe the used dataset and the reasons of your choice. List the used input matrices and all the information that you think are valuable to show (number of non-zero elements, sparsity ratio, \dots); Table \ref{tab:my_label} gives you a possible example.
 
-To add a bit more of generality to the dataset I picked four matrix from four different kinds from the site \url{https://sparse.tamu.edu/}.
+To add a bit more of generality to the dataset I picked four matrix from four different kinds from the site \url{https://sparse.tamu.edu/}. Since all the matrices are squared only the number is written on Table~\ref{tab:dataset}.
 
 \begin{enumerate}
 \item Model Reduction Problem;
@@ -243,30 +236,64 @@ To add a bit more of generality to the dataset I picked four matrix from four di
 
 \begin{table}[h]
     \centering
-    \begin{tabular}{lrrr}
+    \begin{tabular}{lrrrr}
     \toprule
-    \textbf{Name} & \textbf{Pattern Entries} & \textbf{Symmetric} & \textbf{Kind}\\
+    \textbf{Name} & \textbf{Rows} & \textbf{Pattern Entries} & \textbf{Symmetric} & \textbf{Kind}\\
     \midrule
-    \texttt{bone010} & 71,666,325 & Yes & 1\\
-      \texttt{dielFilterV3real} & 89,306,020 & Yes & 2\\
-      \texttt{mawi\_201512020330} & 480,047,894 & Yes & 3\\
-      \texttt{nlpkkt160} & 229,518,112 & Yes & 4\\
+    \texttt{bone010} & 986,703 & 71,666,325 & Yes & 1\\
+      \texttt{dielFilterV3real} & 1,102,824 & 89,306,020 & Yes & 2\\
+      \texttt{mawi\_201512020330} & 226,196,185 & 480,047,894 & Yes & 3\\
+      \texttt{nlpkkt160} &8,345,600 & 229,518,112 & Yes & 4\\
       \bottomrule
     \end{tabular}
     \vspace{.5em}
     \caption{Input Matrices}
-    \label{tab:my_label}
+    \label{tab:dataset}
 \end{table}
 
 \subsection{Experimental Set-up}
-Explain the benchmark metrics and all the experimental set-up (warm-up cycles, number of performed runs\dots).
+%Explain the benchmark metrics and all the experimental set-up (warm-up cycles, number of performed runs\dots).
+I used 5 warm-up runs followed by 5 runs to collect data. I kept this set-up even though after few tests one warm-up round was enough to have stable values. Each job submitted to the cluster executed a full warm-up and run for Algorithm~\ref{alg:cpu}, then Algorithm~\ref{alg:striding} and then Algorithm~\ref{alg:contiguous}. 
 
 \section{Experimental Results}\label{sec:result}
-Present and discuss results. Include plots and tables when required (like Figure \ref{fig:enter-label}). Do not simply describe the figures; criticise the achieved results by underlining how they confirm/differ from the expected outcomes described in Section \ref{sec:methodology}.
+% Present and discuss results. Include plots and tables when required (like Figure \ref{fig:enter-label}). Do not simply describe the figures; criticise the achieved results by underlining how they confirm/differ from the expected outcomes described in Section \ref{sec:methodology}.
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.95\linewidth]{average-execution-time.png}
+    \caption{Average Execution Time (lower is better)}
+    \label{fig:avg-exec-time}
+\end{figure}
 
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.95\linewidth]{average-gflop.png}
+    \caption{Average GFLOP/s Developed (lower is better)}
+    \label{fig:avg-gflop}
+\end{figure}
+As expected in Section~\ref{sec:methodology} and shown in Figure~[\ref{fig:avg-exec-time},~\ref{fig:avg-gflop}], Algorithm~\ref{alg:striding} is faster than all the other implementations.
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.95\linewidth]{gflop-block.png}
+    \caption{GFLOP Compared The Number Of Threads Per Block}
+    \label{fig:gflop-block}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.95\linewidth]{gb-block.png}
+    \caption{GB/s Compared The Number Of Threads Per Block}
+    \label{fig:gb-block}
+\end{figure}
+I decided to dig a bit more into the performances of Algorithm~\ref{alg:striding} by changing the maximum amount of thread per block. Starting from the base of 512 threads I divided by 2 until reaching 32, i.e., the size of warp. The optimal amount of threads per block resulted to be 256. This is due to the use of an atomic instruction within the code, the semantic of the instruction make concurrent write over the same address sequential; in this case if two threads are working on the same row their sum operations will sequentialised since they are trying to write on the same result address. Using less threads,.i.e., each thread works on more elements; conflicts (threads working) on the same row are reduced to a minimum. However, this minimum is not stable, in fact decreasing again the value to 128, 64 or 32 the performances decreases again, this could be symptom of either:
+\begin{itemize}
+\item too few threads working, so an excessive workload for each of them;
+\item too much threads working on the same row, hence an high number of conflicts on the same row.
+\end{itemize}
+Unfortunately, I was not able to determine a more fine grain optimisation, since the optimal size depends on the input matrix shape. Figure~[\ref{fig:gflop-block},~\ref{fig:gb-block}] highlights the fact that the variations of performances are not constant over all the matrices considered.
 \section{Conclusions}
-[max 200 words]\\
-Summarize findings and future work \dots
+%[max 200 words]\\
+%Summarize findings and future work \dots
+
 
 \bibliographystyle{IEEEtran}
 \bibliography{references}

@@ -14,22 +14,23 @@ NUM_TYPE* test_spmv_cpu(const IDX_TYPE *row_indices, const IDX_TYPE *col_indices
   double bandwidth[NUM_TEST];
   NUM_TYPE *resulting_array;
   
-  for (size_t i = 0; i < NUM_TEST; ++i) {
+  for (size_t i = 0; i < NUM_TEST + WARM_UP_RUN; ++i) {
 	resulting_array = pre_filled_array_cpu(num_rows, 0);
 	
 	auto start = std::chrono::high_resolution_clock::now(); 
     spmv_cpu(row_indices, col_indices, val, arr, nnz, resulting_array);
     auto end = std::chrono::high_resolution_clock::now();
 
-	std::chrono::duration<double, std::milli> duration_ms = end - start;
-	
-    double elapsed_ms = duration_ms.count();
-	flops[i] = flops_counter(nnz, elapsed_ms);
-	times[i] = elapsed_ms;
-	bandwidth[i] = (nnz * sizeof(NUM_TYPE) * MEMEORY_RW / elapsed_ms) / 1e12;
-	
-	if(i < NUM_TEST - 1)
-	  delete[] resulting_array;
+	if(i >= WARM_UP_RUN){
+	  std::chrono::duration<double, std::milli> duration_ms = end - start;
+	  double elapsed_ms = duration_ms.count();
+	  flops[i] = flops_counter(nnz, elapsed_ms);
+	  times[i] = elapsed_ms;
+	  bandwidth[i] = (nnz * sizeof(NUM_TYPE) * MEMEORY_RW / elapsed_ms) / 1e12;
+	}
+	if(i < (NUM_TEST + WARM_UP_RUN - 1)){
+	  delete [] resulting_array;
+	}
   }
   
   double times_mu = mu_fn(times, NUM_TEST);
@@ -71,7 +72,7 @@ NUM_TYPE* test_spmv_gpu(gpu_kernel kernel, const IDX_TYPE *row_indices,
   size_t portion = std::ceil(nnz / (block_size * grid_size));
   printf("The kernl will be executed on %lu threads, eaach of them should cover at most %lu elements\n", (grid_size * block_size), portion);
 
-  for (size_t i = 0; i < NUM_TEST; ++i) {
+  for (size_t i = 0; i < NUM_TEST + WARM_UP_RUN; ++i) {
 	resulting_array = pre_filled_array_gpu(num_rows, 0);
     cudaCheckError(cudaEventRecord(start));
     kernel<<<grid_size, block_size>>>(row_indices, col_indices, val, arr, resulting_array, nnz, portion);
@@ -79,15 +80,17 @@ NUM_TYPE* test_spmv_gpu(gpu_kernel kernel, const IDX_TYPE *row_indices,
     cudaCheckError(cudaEventSynchronize(stop));
     cudaCheckError(cudaDeviceSynchronize());
 
-    float milliseconds = 0;
-    cudaCheckError(cudaEventElapsedTime(&milliseconds, start, stop));
-	
-    flops[i] = flops_counter(nnz, milliseconds);
-    times[i] = milliseconds;
-	bandwidth[i] = (nnz * sizeof(NUM_TYPE) * MEMEORY_RW / milliseconds) / 1e12;
-	
-	if(i < NUM_TEST - 1)
+	if(i >= WARM_UP_RUN){
+	  float milliseconds = 0;
+	  cudaCheckError(cudaEventElapsedTime(&milliseconds, start, stop));
+	  
+	  flops[i] = flops_counter(nnz, milliseconds);
+	  times[i] = milliseconds;
+	  bandwidth[i] = (nnz * sizeof(NUM_TYPE) * MEMEORY_RW / milliseconds) / 1e12;
+	}
+	if(i < (NUM_TEST + WARM_UP_RUN - 1)){
 	  cudaCheckError(cudaFree(resulting_array));
+	}
   }
   
   double times_mu = mu_fn(times, NUM_TEST);

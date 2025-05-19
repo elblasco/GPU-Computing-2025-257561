@@ -38,7 +38,7 @@ get_COO(const char *filename) {
   cudaCheckError(cudaMallocManaged(&row_indices, nnz * sizeof(IDX_TYPE)));
   cudaCheckError(cudaMallocManaged(&col_indices, nnz * sizeof(IDX_TYPE)));
   cudaCheckError(cudaMallocManaged(&vals, nnz * sizeof(NUM_TYPE)));
-
+  
   IDX_TYPE row, col;
   NUM_TYPE val;
   for (size_t i = 0; i < nnz; ++i) {

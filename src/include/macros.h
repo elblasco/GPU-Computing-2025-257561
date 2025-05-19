@@ -5,11 +5,12 @@
 #include <cuda_runtime.h>
 #include <cuda_runtime_api.h>
 
-#define MAX_BLOCK_SIZE 512
+#define MAX_BLOCK_SIZE 128
 #define MAX_GRID_SIZE 256
 #define IDX_TYPE size_t
 #define NUM_TYPE double
-#define NUM_TEST 10
+#define NUM_TEST 5
+#define WARM_UP_RUN 5
 #define OPS_PER_NUN 2
 #define MEMEORY_RW 5
 #define cudaCheckError(ans)                                                    \
