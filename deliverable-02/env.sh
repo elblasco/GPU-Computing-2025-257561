@@ -8,6 +8,12 @@ PUR='\033[0;35m'
 GRE='\033[0;32m'
 NC='\033[0m' # No Color
 
+git submodule update --init
+
+sed -i 's|url = git@github.com:HicrestLaboratory/distributed_mmio.git|url = https://github.com/HicrestLaboratory/distributed_mmio|' MtxMan/.gitmodules 
+
+git submodule update --init --recursive
+
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r ./MtxMan/requirements.txt
