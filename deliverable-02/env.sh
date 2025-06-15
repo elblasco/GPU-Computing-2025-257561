@@ -8,6 +8,10 @@ PUR='\033[0;35m'
 GRE='\033[0;32m'
 NC='\033[0m' # No Color
 
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r ./MtxMan/requirements.txt
+
 export BIN=bin/coo-mul
 export ITERATIONS=15
 export HOST="baldo"
@@ -16,6 +20,8 @@ if [[ ! -z $1 ]]; then
 else
     export MTX_PATH="./datasets"
 fi
+
+python3 ./MtxMan/scripts/sync_datasets.py --binary-mtx
 
 # Read graph paths from matrices_list.txt in each subfolder
 GRAPHS_SMALL_D=()
