@@ -27,14 +27,21 @@ urls=(
 # Download and extract each file
 for url in "${urls[@]}"; do
   file=$(basename "$url")
+  dir="${file%.tar.gz}"
+
   echo "Downloading $file..."
   wget "$url"
-  
+
   echo "Extracting $file..."
   tar -xzf "$file"
-done
 
-echo "All files downloaded and extracted."
+  echo "Moving matrix file from $dir..."
+  if [ -f "$dir/$dir.mtx" ]; then
+    mv "$dir/$dir.mtx" .
+  else
+    echo "Warning: $dir/$dir.mtx not found"
+  fi
+done
 
 cd ..
 
