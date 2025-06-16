@@ -41,6 +41,8 @@ for url in "${urls[@]}"; do
   else
     echo "Warning: $dir/$dir.mtx not found"
   fi
+
+  rm -r "$dir" "$dir.tar.gaz"
 done
 
 cd ..
@@ -53,29 +55,3 @@ if [[ ! -z $1 ]]; then
 else
     export MTX_PATH="./datasets"
 fi
-
-# Read graph paths from matrices_list.txt in each subfolder
-GRAPHS_SMALL_D=()
-while IFS= read -r line; do
-    GRAPHS_SMALL_D+=("$line")
-done < "$MTX_PATH/small_diameter/matrices_list.txt"
-
-GRAPHS_LARGE_D=()
-while IFS= read -r line; do
-    GRAPHS_LARGE_D+=("$line")
-done < "$MTX_PATH/large_diameter/matrices_list.txt"
-
-MY_MATRICES=()
-while IFS= read -r line; do
-    MY_MATRICES+=("$line")
-done < "$MTX_PATH/graph500/matrices_list.txt"
-
-ALL_GRAPHS=()
-while IFS= read -r line; do
-    ALL_GRAPHS+=("$line")
-done < "$MTX_PATH/matrices_list.txt"
-
-export GRAPHS_SMALL_D
-export GRAPHS_LARGE_D
-export MY_MATRICES
-export ALL_GRAPHS
