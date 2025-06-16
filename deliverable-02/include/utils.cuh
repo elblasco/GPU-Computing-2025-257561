@@ -1,6 +1,6 @@
 #pragma once
 
-#include "colors.h"
+#include "colours.h"
 #include <cstdint>
 #include <stdio.h>
 #include <chrono>
