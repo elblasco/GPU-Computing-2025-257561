@@ -11,10 +11,10 @@ NC='\033[0m' # No Color
 git submodule update --init --recursive
 
 # Create the dataset directory if it doesn't exist
-mkdir -p dataset
+mkdir -p datasets
 
 # Change into the dataset directory
-cd dataset
+cd datasets
 
 # List of URLs to download
 urls=(
@@ -42,9 +42,8 @@ for url in "${urls[@]}"; do
 	  else
 		  echo "Warning: $dir/$dir.mtx not found"
 	  fi
-	  
-	  rm -r "$dir" "$dir.tar.gaz"
   fi
+  rm -fr "$dir" "$file"
 done
 
 cd ..
@@ -52,6 +51,8 @@ cd ..
 export BIN=bin/coo-mul
 export ITERATIONS=15
 export HOST="baldo"
+export EXPERIMENT_NAME="COO_SPMV"
+export FINISHED_LOG="./SbatchMan/metadata/$HOST/$EXPERIMENT_NAME/finished.txt"
 if [[ ! -z $1 ]]; then
     export MTX_PATH=$1
 else
