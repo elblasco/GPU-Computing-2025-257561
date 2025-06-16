@@ -28,7 +28,7 @@ urls=(
 for url in "${urls[@]}"; do
   file=$(basename "$url")
   echo "Downloading $file..."
-  curl -O "$url" || wget "$url"
+  wget "$url"
   
   echo "Extracting $file..."
   tar -xzf "$file"
