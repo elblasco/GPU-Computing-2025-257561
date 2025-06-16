@@ -28,7 +28,8 @@ source SbatchMan/submit.sh
 my_hostname=$(${SbM_UTILS}/hostname.sh)
 
 #echo -e "${GRE}%% Running tests on small-diameter graphs %%${NC}"
-for file in "$MTX_PATH"; do
+for file in "$MTX_PATH"/*.mtx; do
+	echo "$file"
     echo "----- Testing '$(basename "${file%.*}")' graph -----"
     SbM_submit_function --verbose --expname $expname --binary $BIN -f "$MTX_PATH/$file" -n $ITERATIONS
     echo "JOB ID: ${job_id}"
