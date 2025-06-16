@@ -28,21 +28,23 @@ urls=(
 for url in "${urls[@]}"; do
   file=$(basename "$url")
   dir="${file%.tar.gz}"
-
-  echo "Downloading $file..."
-  wget "$url"
-
-  echo "Extracting $file..."
-  tar -xzf "$file"
-
-  echo "Moving matrix file from $dir..."
-  if [ -f "$dir/$dir.mtx" ]; then
-    mv "$dir/$dir.mtx" .
-  else
-    echo "Warning: $dir/$dir.mtx not found"
+  if ! [ -f "$dir.mtx" ]; then
+	  
+	  echo "Downloading $file..."
+	  wget "$url"
+	  
+	  echo "Extracting $file..."
+	  tar -xzf "$file"
+	  
+	  echo "Moving matrix file from $dir..."
+	  if [ -f "$dir/$dir.mtx" ]; then
+		  mv "$dir/$dir.mtx" .
+	  else
+		  echo "Warning: $dir/$dir.mtx not found"
+	  fi
+	  
+	  rm -r "$dir" "$dir.tar.gaz"
   fi
-
-  rm -r "$dir" "$dir.tar.gaz"
 done
 
 cd ..
