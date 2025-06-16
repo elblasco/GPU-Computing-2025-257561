@@ -1,9 +1,6 @@
 [submodule "deliverable-02/distributed_mmio"]
 	path = deliverable-02/distributed_mmio
 	url = https://github.com/HicrestLaboratory/distributed_mmio.git
-[submodule "deliverable-02/MtxMan"]
-	path = deliverable-02/MtxMan
-	url = https://github.com/ThomasPasquali/MtxMan.git
 [submodule "deliverable-02/SbatchMan"]
 	path = deliverable-02/SbatchMan
 	url = https://github.com/LorenzoPichetti/SbatchMan.git
