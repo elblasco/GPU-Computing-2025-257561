@@ -8,13 +8,21 @@ PUR='\033[0;35m'
 GRE='\033[0;32m'
 NC='\033[0m' # No Color
 
+ml CUDA
+
 git submodule update --init --recursive
 
 # Create the dataset directory if it doesn't exist
 mkdir -p datasets
 
+if [[ ! -z $1 ]]; then
+    export MTX_PATH=$1
+else
+    export MTX_PATH="./datasets"
+fi
+
 # Change into the dataset directory
-cd datasets
+cd "$MTX_PATH"
 
 # List of URLs to download
 urls=(
@@ -52,9 +60,3 @@ export BIN=bin/coo-mul
 export ITERATIONS=15
 export HOST="baldo"
 export EXPERIMENT_NAME="COO_SPMV"
-export FINISHED_LOG="./SbatchMan/metadata/$HOST/$EXPERIMENT_NAME/finished.txt"
-if [[ ! -z $1 ]]; then
-    export MTX_PATH=$1
-else
-    export MTX_PATH="./datasets"
-fi
