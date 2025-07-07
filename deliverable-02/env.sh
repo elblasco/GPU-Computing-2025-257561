@@ -8,21 +8,28 @@ PUR='\033[0;35m'
 GRE='\033[0;32m'
 NC='\033[0m' # No Color
 
-ml CUDA
+ml CUDA CMake
 
 git submodule update --init --recursive
+
+cd distributed_mmio || exit
+mkdir -p build && cd build || exit
+cmake ..
+make
+
+cd ../../ || exit
 
 # Create the dataset directory if it doesn't exist
 mkdir -p datasets
 
-if [[ ! -z $1 ]]; then
-    export MTX_PATH=$1
+if [[ -n $1 ]]; then
+    export MTX_PATH="$1"
 else
     export MTX_PATH="./datasets"
 fi
 
 # Change into the dataset directory
-cd "$MTX_PATH"
+cd "$MTX_PATH" || exit
 
 # List of URLs to download
 urls=(
@@ -36,7 +43,7 @@ urls=(
 for url in "${urls[@]}"; do
   file=$(basename "$url")
   dir="${file%.tar.gz}"
-  if ! [ -f "$dir.mtx" ]; then
+  if ! [ -f "$dir.bmtx" ]; then
 	  
 	  echo "Downloading $file..."
 	  wget "$url"
@@ -50,8 +57,11 @@ for url in "${urls[@]}"; do
 	  else
 		  echo "Warning: $dir/$dir.mtx not found"
 	  fi
+
+	  echo "Converting $dir.mtx into bmtx"
+	  ../distributed_mmio/build/mtx_to_bmtx "$dir.mtx"
   fi
-  rm -fr "$dir" "$file"
+  rm -fr "$dir" "$file" "$dir.mtx"
 done
 
 cd ..
