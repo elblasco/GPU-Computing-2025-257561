@@ -3,6 +3,8 @@
 
 #include "../include/colours.h"
 #include "../include/utils.cuh"
+#include "../include/testers.cuh"
+#include "../include/gpu.cuh"
 #include "../include/cli.hpp"
 
 int main(int argc, char **argv) {
@@ -12,16 +14,13 @@ int main(int argc, char **argv) {
     return -1;
   }
 
-  CPU_TIMER_INIT(MTX_read);
-
-  COO_local<uint64_t, double> *coo_matrix = Distr_MMIO_COO_local_read<uint64_t, double>(args.filename);
-
-  CPU_TIMER_STOP(MTX_read);
-
-  printf("\n[OUT] MTX file read time: %f ms\n", CPU_TIMER_ELAPSED(MTX_read));
-
-  printf("Matrix size: %.3fM rows, %.3fM nnz\n", coo_matrix->nrows / 1e6, coo_matrix->nnz / 1e6);
-
+  printf("Working on matrix: %s\n", args.filename);
   
+  COO_local<IDX_TYPE, NUM_TYPE> *coo_matrix = Distr_MMIO_COO_local_read<IDX_TYPE, NUM_TYPE>(args.filename);
+
+  test_spmv_gpu(spmv_with_striding, coo_matrix);
+
+  test_spmv_gpu(spmv_without_striding, coo_matrix);
+
   return 0;
 }
