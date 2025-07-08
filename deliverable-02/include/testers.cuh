@@ -33,8 +33,6 @@ void test_spmv_gpu(gpu_kernel kernel, const COO_local<uint32_t, NUM_TYPE> *spars
     CUDA_MANGED_MALLOC(d_res_array, NUM_TYPE, sparse_matrix -> nrows);
 	CUDA_MANGED_MALLOC(d_dense_array, NUM_TYPE, sparse_matrix -> nrows);
 
-	printf("Iteration %lu\n", run);
-
 	for (size_t j = 0; j < sparse_matrix -> nrows; ++j){
 	  d_res_array[j] = 0.0;
 	  d_dense_array[j] = 1.0;
@@ -47,8 +45,7 @@ void test_spmv_gpu(gpu_kernel kernel, const COO_local<uint32_t, NUM_TYPE> *spars
 
 	CUDA_TIMER_STOP(gpu_time);
 
-	float milliseconds = 0;
-	CUDA_TIMER_ELAPSED(gpu_time);
+	float milliseconds = CUDA_TIMER_ELAPSED(gpu_time);
 
 	if (WARM_UP_RUN <= run){
 	  flops[run - WARM_UP_RUN] = flops_counter(nnz, milliseconds);
