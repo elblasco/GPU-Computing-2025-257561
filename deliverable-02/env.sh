@@ -35,7 +35,8 @@ cd "$MTX_PATH" || exit
 urls=(
   "https://suitesparse-collection-website.herokuapp.com/MM/Oberwolfach/bone010.tar.gz"
   "https://suitesparse-collection-website.herokuapp.com/MM/Dziekonski/dielFilterV3real.tar.gz"
-  "https://suitesparse-collection-website.herokuapp.com/MM/MAWI/mawi_201512020330.tar.gz"
+  "https://suitesparse-collection-website.herokuapp.com/MM/Janna/Flan_1565.tar.gz"
+  "https://suitesparse-collection-website.herokuapp.com/MM/DIMACS10/kron_g500-logn21.tar.gz"
   "https://suitesparse-collection-website.herokuapp.com/MM/Schenk/nlpkkt160.tar.gz"
 )
 
