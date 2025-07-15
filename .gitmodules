@@ -2,3 +2,6 @@
 	path = deliverable-02/SbatchMan
 	url = https://github.com/LorenzoPichetti/SbatchMan.git
 	branch = example
+[submodule "distributed_mmio"]
+	path = deliverable-02/distributed_mmio
+	url = https://github.com/matteo-dinoia/distributed_mmio.git
