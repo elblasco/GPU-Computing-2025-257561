@@ -1,8 +1,9 @@
 #pragma once
 
 #include "utils.cuh"
+#include "gpu.cuh"
 
-void test_spmv_gpu(gpu_kernel kernel, const COO_local<uint32_t, NUM_TYPE> *sparse_matrix) {
+void test_spmv(const mmio_coo_u64_f32_t *sparse_matrix, kernel_type kernel) {
   float times[NUM_TEST];
   float flops[NUM_TEST];
   float bandwidth[NUM_TEST];
@@ -12,38 +13,53 @@ void test_spmv_gpu(gpu_kernel kernel, const COO_local<uint32_t, NUM_TYPE> *spars
   CUDA_MANGED_MALLOC(d_rows, IDX_TYPE, nnz);
   CUDA_MANGED_MALLOC(d_cols, IDX_TYPE, nnz);
 
-  for (size_t i = 0; i < nnz; ++i){
-	d_vals[i] = sparse_matrix -> val[i];
-	d_rows[i] = sparse_matrix -> row[i];
-	d_cols[i] = sparse_matrix -> col[i];
-  }
+  populate_d_arrays(sparse_matrix, d_vals, d_rows, d_cols);
 
   CUDA_TIMER_DEF(gpu_time);
 
-  size_t possible_grid_size = MAX_GRID_SIZE;
-  size_t possible_block_size = MAX_BLOCK_SIZE;
-
-  size_t grid_size = MIN(possible_grid_size, (size_t)std::ceil(nnz / (float)MAX_BLOCK_SIZE));
-  size_t block_size = MIN(possible_block_size, nnz);
-
+  size_t grid_size = MIN(MAX_GRID_SIZE, CEILING(nnz, MAX_BLOCK_SIZE));
+  size_t block_size = MIN(MAX_BLOCK_SIZE, nnz);
   size_t portion = CEILING(nnz, (block_size * grid_size));
-  printf("The kernl will be executed on %lu threads, eaach of them should cover at most %lu elements\n", (grid_size * block_size), portion);
-
+  
   for (size_t run = 0; run < NUM_TEST + WARM_UP_RUN; run++) {
-    CUDA_MANGED_MALLOC(d_res_array, NUM_TYPE, sparse_matrix -> nrows);
+	// IMPORTANT inversion of column and rows to have a row major COO
+    CUDA_MANGED_MALLOC(d_res_array, NUM_TYPE, sparse_matrix -> ncols);
 	CUDA_MANGED_MALLOC(d_dense_array, NUM_TYPE, sparse_matrix -> nrows);
 
-	for (size_t j = 0; j < sparse_matrix -> nrows; ++j){
-	  d_res_array[j] = 0.0;
-	  d_dense_array[j] = 1.0;
+	for (size_t j = 0; j < MAX(sparse_matrix -> nrows, sparse_matrix -> ncols); ++j){
+	  if (j < sparse_matrix -> ncols){
+		d_res_array[j] = 0.0;
+	  }
+	  if (j < sparse_matrix -> nrows){
+	    d_dense_array[j] = 0.0;
+	  }
 	}
 
-	CUDA_TIMER_START(gpu_time);
+	switch(kernel){
+	case BASELINE:
+	  //printf("Kernel ASSIGNEMENT_01 will be executed on %lu threads, each of them should cover at most %lu elements\n", (grid_size * block_size), portion);
+	  CUDA_TIMER_START(gpu_time);
+	  spmv_with_striding<<<grid_size, block_size>>>(d_rows, d_cols, d_vals, d_dense_array, d_res_array, nnz, portion);
+	  cudaDeviceSynchronize();
+	  CUDA_TIMER_STOP(gpu_time);
+	  break;
 
-	kernel<<<grid_size, block_size>>>(d_rows, d_cols, d_vals, d_dense_array, d_res_array, nnz, portion);
-    cudaDeviceSynchronize();
+	case WARP_SHFL:
+	  //printf("Kernel WARP_SHFL will be executed on %lu threads\n", (grid_size * block_size));
+	  CUDA_TIMER_START(gpu_time);
+	  spmv_coo_shfl<<<grid_size, block_size>>>(d_rows, d_cols, d_vals, d_dense_array, d_res_array, nnz);
+	  cudaDeviceSynchronize();
+	  CUDA_TIMER_STOP(gpu_time);
+	  break;
 
-	CUDA_TIMER_STOP(gpu_time);
+	case WARP_SHFL_UNROLL:
+	  //printf("Kernel WARP_SHFL_UNROLL will be executed on %lu threads\n", (grid_size * block_size));
+	  CUDA_TIMER_START(gpu_time);
+	  spmv_coo_shfl_unroll<<<grid_size, block_size>>>(d_rows, d_cols, d_vals, d_dense_array, d_res_array, nnz);
+	  cudaDeviceSynchronize();
+	  CUDA_TIMER_STOP(gpu_time);
+	  break;
+	}
 
 	float milliseconds = CUDA_TIMER_ELAPSED(gpu_time);
 
@@ -53,24 +69,17 @@ void test_spmv_gpu(gpu_kernel kernel, const COO_local<uint32_t, NUM_TYPE> *spars
 	  bandwidth[run - WARM_UP_RUN] = (nnz * sizeof(NUM_TYPE) * MEMEORY_RW / milliseconds) / 1e12;
 	}
 
+	for(size_t x = 0; x < sparse_matrix -> ncols; x++){
+	  if (d_res_array[x] != 0){
+		printf("At index %lu result contains %f\n", x, d_res_array[x]);
+	  }
+	}
+
 	CUDA_FREE(d_dense_array);
 	CUDA_FREE(d_res_array);
   }
 
-  double times_mu = geometric_mean(times, NUM_TEST);
-  double times_sigma = sigma_fn(times, times_mu, NUM_TEST);
-
-  printf("This kernel executed with an average of %lf ms with std.dev. of %lf ms\n", times_mu, times_sigma);
-
-  double flops_mu = geometric_mean(flops, NUM_TEST);
-  double flops_sigma = sigma_fn(flops, flops_mu, NUM_TEST);
-
-  printf("This kernel produced an average of %lf GFLOP/s with std.dev. of %lf GFLOP/s\n", flops_mu, flops_sigma);
-
-  double bandwidth_mu = geometric_mean(bandwidth, NUM_TEST);
-  double bandwidth_sigma = sigma_fn(bandwidth, bandwidth_mu, NUM_TEST);
-
-  printf("This kernel produced an avergare bandwidth of %lf GB/s with std.dev. of %lf GB/s the theoretical maximun is 933 GB/s\n", bandwidth_mu, bandwidth_sigma);
+  compute_results(times, flops, bandwidth);
 
   CUDA_TIMER_DESTROY(gpu_time);
   CUDA_FREE(d_vals);

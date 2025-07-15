@@ -8,16 +8,11 @@ PUR='\033[0;35m'
 GRE='\033[0;32m'
 NC='\033[0m' # No Color
 
-ml CUDA CMake
+ml CUDA
 
 git submodule update --init --recursive
 
-cd distributed_mmio || exit
-mkdir -p build && cd build || exit
-cmake ..
-make
-
-cd ../../ || exit
+make converter || exit
 
 # Create the dataset directory if it doesn't exist
 mkdir -p datasets
@@ -33,41 +28,43 @@ cd "$MTX_PATH" || exit
 
 # List of URLs to download
 urls=(
-  "https://suitesparse-collection-website.herokuapp.com/MM/Oberwolfach/bone010.tar.gz"
   "https://suitesparse-collection-website.herokuapp.com/MM/Dziekonski/dielFilterV3real.tar.gz"
   "https://suitesparse-collection-website.herokuapp.com/MM/Janna/Flan_1565.tar.gz"
-  "https://suitesparse-collection-website.herokuapp.com/MM/DIMACS10/kron_g500-logn21.tar.gz"
+  "https://suitesparse-collection-website.herokuapp.com/MM/Harvard_Seismology/JP.tar.gz"
+  "https://suitesparse-collection-website.herokuapp.com/MM/MAWI/mawi_201512020330.tar.gz"
   "https://suitesparse-collection-website.herokuapp.com/MM/Schenk/nlpkkt160.tar.gz"
+  "https://suitesparse-collection-website.herokuapp.com/MM/Janna/Queen_4147.tar.gz"
+  "https://suitesparse-collection-website.herokuapp.com/MM/JGD_Relat/relat9.tar.gz"
+  "https://suitesparse-collection-website.herokuapp.com/MM/VLSI/vas_stokes_2M.tar.gz"
 )
 
 # Download and extract each file
 for url in "${urls[@]}"; do
   file=$(basename "$url")
   dir="${file%.tar.gz}"
-  if ! [ -f "$dir.bmtx" ]; then
-	  
-	  echo "Downloading $file..."
-	  wget "$url"
-	  
-	  echo "Extracting $file..."
-	  tar -xzf "$file"
-	  
-	  echo "Moving matrix file from $dir..."
-	  if [ -f "$dir/$dir.mtx" ]; then
-		  mv "$dir/$dir.mtx" .
-	  else
-		  echo "Warning: $dir/$dir.mtx not found"
-	  fi
+  if ! [ -f "$dir.sbmtx" ]; then
 
-	  echo "Converting $dir.mtx into bmtx"
-	  ../distributed_mmio/build/mtx_to_bmtx "$dir.mtx"
+	  echo -e "${GRE}Downloading $file...${NC}"
+	  wget "$url"
+
+	  echo -e "${PUR}Extracting $file...${NC}"
+	  tar -xzf "$file"
+
+	  if [ -f "$dir/$dir.mtx" ]; then
+		  echo -e "${PUR}Moving $dir/$dir.mtx to $dir.mtx${NC}"
+		  mv "$dir/$dir.mtx" .
+		  echo -e "${PUR}Converting $dir/$dir.mtx to $dir.sbmtx${NC}"
+		  ./build/mtx_to_sbmtx "$dir.mtx"
+	  else
+		  echo -e "${RED}Warning: $dir/$dir.mtx not found${NC}"
+	  fi
   fi
-  rm -fr "$dir" "$file" "$dir.mtx"
+  rm -fr "$dir" "$file"
 done
 
 cd ..
 
-export BIN=bin/coo-mul
+export BIN=build/coo-mul
 export ITERATIONS=15
 export HOST="baldo"
 export EXPERIMENT_NAME="COO_SPMV"

@@ -1,11 +1,8 @@
-#include "../distributed_mmio/include/mmio.h"
-#include "../distributed_mmio/include/mmio_utils.h"
+#include "../distributed_mmio/include/mmio_c_wrapper.h"
 
 #include "../include/colours.h"
-#include "../include/utils.cuh"
-#include "../include/testers.cuh"
-#include "../include/gpu.cuh"
 #include "../include/cli.hpp"
+#include "../include/testers.cuh"
 
 int main(int argc, char **argv) {
   Cli_Args args;
@@ -14,13 +11,19 @@ int main(int argc, char **argv) {
     return -1;
   }
 
-  printf("Working on matrix: %s\n", args.filename);
-  
-  COO_local<IDX_TYPE, NUM_TYPE> *coo_matrix = Distr_MMIO_COO_local_read<IDX_TYPE, NUM_TYPE>(args.filename);
+  mmio_coo_u64_f32_t *coo_matrix = mmio_read_coo_u64_f32(args.filename, true);
 
-  test_spmv_gpu(spmv_with_striding, coo_matrix);
+  printf("The matrix has %lu and the last value is %f\n",coo_matrix -> nnz, coo_matrix -> val[coo_matrix -> nnz - 1]);
 
-  test_spmv_gpu(spmv_without_striding, coo_matrix);
+  printf(RED "Now running the baseline" RESET "\n");
+  test_spmv(coo_matrix, kernel_type::BASELINE);
 
+  printf(RED "Now running the warp shuffle" RESET "\n");
+  test_spmv(coo_matrix, kernel_type::WARP_SHFL);
+
+  printf(RED "Now running the warp shuffle with unroll" RESET "\n");
+  test_spmv(coo_matrix, kernel_type::WARP_SHFL_UNROLL);
+
+  mmio_destroy_coo_u64_f32(coo_matrix);
   return 0;
 }
