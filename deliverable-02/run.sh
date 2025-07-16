@@ -2,14 +2,6 @@
 
 source env.sh
 
-echo -e "${GRE}Building $BIN...${NC}"
-make clean && make $BIN
-
-if [ $? -ne 0 ]; then
-    echo -e "${RED} Build failed exiting${NC}"
-	exit
-fi
-
 # Setup environment
 if [[ -z $SbM_HOME ]]; then
     echo -e "${GRE}Setting up experiments environment...${NC}"
@@ -32,8 +24,8 @@ fi
 source SbatchMan/submit.sh
 my_hostname=$(${SbM_UTILS}/hostname.sh)
 
-for file in $MTX_PATH/*.mtx; do
+for file in $MTX_PATH/*.sbmtx; do
     echo "----- Testing '$(basename "${file%.*}")' graph -----"
-    SbM_submit_function --verbose --expname "$COO_SPMV_$(basename $file)" --binary $BIN -f "$file" -n $ITERATIONS
+    SbM_submit_function --verbose --expname "$COO_SPMV_$(basename $file)" --binary $BIN -f "$file"# -n $ITERATIONS
     echo "JOB ID: ${job_id}"
 done

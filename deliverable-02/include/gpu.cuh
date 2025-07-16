@@ -29,7 +29,7 @@ __global__ void spmv_coo_kernel_shared(const IDX_TYPE __restrict__ *d_row,
                                        const NUM_TYPE num_rows) {
   __shared__ float sdata[MAX_BLOCK_SIZE];
 
-  size_t thread_idx = threadIdx.x + blockIdx.x * blockDim.x;
+  size_t tid = threadIdx.x + blockIdx.x * blockDim.x;
   size_t n_thread = blockDim.x * gridDim.x;
 
   // Initialize shared memory
@@ -39,30 +39,27 @@ __global__ void spmv_coo_kernel_shared(const IDX_TYPE __restrict__ *d_row,
 
   __syncthreads();
 
-  for(size_t idx = tid; idx< nnz; idx += n_thread) {
-    IDX_TYPE row = row_idx[tid];
-    IDX_TYPE col = col_idx[tid];
+  for (size_t idx = tid; idx < nnz; idx += n_thread) {
+    IDX_TYPE row = d_row[tid];
+    IDX_TYPE col = d_col[tid];
     NUM_TYPE val = values[tid];
 
     NUM_TYPE product = val * x[col];
 
     // Each thread writes its product in shared memory for reduction
-    sdata[idx % MAX_BLOCK_SIZE] += product;
+    atomicAdd(&sdata[idx % MAX_BLOCK_SIZE], product);
   }
 
   __syncthreads();
 
   // Cooperative intra-warp reduction:
-  if (tid < nnz) {
-    int row = row_idx[tid];
 
-    // Use the first thread in the block for each unique row to accumulate
-    // partial sums This reduces the number of atomicAdds
-    float sum = sdata[threadIdx.x];
+  // Use the first thread in the block for each unique row to accumulate
+  // partial sums This reduces the number of atomicAdds
+  float sum = sdata[threadIdx.x];
 
-    // atomicAdd on global y
-    atomicAdd(&y[row], sum);
-  }
+  // atomicAdd on global y
+  atomicAdd(&y[row], sum);
 }
 
 __global__ void spmv_coo_shfl_unroll(const IDX_TYPE *__restrict__ d_rows,
@@ -87,8 +84,8 @@ __global__ void spmv_coo_shfl_unroll(const IDX_TYPE *__restrict__ d_rows,
     NUM_TYPE sum = product;
 
 // Compare row ids between threads in warp
-#pragma unroll 5
-    for (size_t delta = 1; delta < WARP_SIZE; delta *= 2) {
+#pragma unroll
+    for (size_t delta = 1; delta < WARP_SIZE; delta <<= 2) {
       NUM_TYPE prev_row = __shfl_up_sync(FULL_WARP_MASK, row, delta);
       NUM_TYPE prev_sum = __shfl_up_sync(FULL_WARP_MASK, sum, delta);
 
@@ -130,7 +127,7 @@ __global__ void spmv_coo_shfl(const IDX_TYPE *__restrict__ d_rows,
     NUM_TYPE sum = product;
 
     // Compare row ids between threads in warp
-    for (size_t delta = 1; delta < WARP_SIZE; delta *= 2) {
+    for (size_t delta = 1; delta < WARP_SIZE; delta <<= 2) {
       NUM_TYPE prev_row = __shfl_up_sync(FULL_WARP_MASK, row, delta);
       NUM_TYPE prev_sum = __shfl_up_sync(FULL_WARP_MASK, sum, delta);
 

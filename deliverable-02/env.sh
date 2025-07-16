@@ -8,11 +8,22 @@ PUR='\033[0;35m'
 GRE='\033[0;32m'
 NC='\033[0m' # No Color
 
+export BIN=build/coo-mul
+export ITERATIONS=15
+export HOST="baldo"
+export EXPERIMENT_NAME="COO_SPMV"
+
 ml CUDA
 
 git submodule update --init --recursive
 
-make converter || exit
+echo -e "${GRE}Building $BIN...${NC}"
+make all
+
+if [ $? -ne 0 ]; then
+    echo -e "${RED} Build failed exiting${NC}"
+	exit
+fi
 
 # Create the dataset directory if it doesn't exist
 mkdir -p datasets
@@ -53,8 +64,9 @@ for url in "${urls[@]}"; do
 	  if [ -f "$dir/$dir.mtx" ]; then
 		  echo -e "${PUR}Moving $dir/$dir.mtx to $dir.mtx${NC}"
 		  mv "$dir/$dir.mtx" .
-		  echo -e "${PUR}Converting $dir/$dir.mtx to $dir.sbmtx${NC}"
-		  ./build/mtx_to_sbmtx "$dir.mtx"
+		  echo -e "${PUR}Converting $dir.mtx to $dir.sbmtx${NC}"
+		  ./../build/mtx_to_sbmtx "$dir.mtx"
+		  echo "The last command returned $?"
 	  else
 		  echo -e "${RED}Warning: $dir/$dir.mtx not found${NC}"
 	  fi
@@ -63,8 +75,3 @@ for url in "${urls[@]}"; do
 done
 
 cd ..
-
-export BIN=build/coo-mul
-export ITERATIONS=15
-export HOST="baldo"
-export EXPERIMENT_NAME="COO_SPMV"
