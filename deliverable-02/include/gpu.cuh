@@ -2,9 +2,6 @@
 
 #include "utils.cuh"
 
-#define WARP_SIZE 32
-#define FULL_WARP_MASK 0xffffffff
-
 __global__ void spmv_with_striding(const IDX_TYPE __restrict__ *row,
                                    const IDX_TYPE __restrict__ *col,
                                    const NUM_TYPE *val, const NUM_TYPE *arr,
@@ -27,39 +24,39 @@ __global__ void spmv_coo_kernel_shared(const IDX_TYPE __restrict__ *d_row,
                                        const NUM_TYPE *x, NUM_TYPE *y,
                                        const NUM_TYPE nnz,
                                        const NUM_TYPE num_rows) {
-  __shared__ float sdata[MAX_BLOCK_SIZE];
+  __shared__ NUM_TYPE shared_pref_sum[MAX_BLOCK_SIZE];
 
-  size_t tid = threadIdx.x + blockIdx.x * blockDim.x;
+  size_t id_thread = threadIdx.x + blockIdx.x * blockDim.x;
   size_t n_thread = blockDim.x * gridDim.x;
 
   // Initialize shared memory
   if (threadIdx.x < MAX_BLOCK_SIZE) {
-    sdata[threadIdx.x] = 0.0f;
+    shared_pref_sum[threadIdx.x] = 0.0f;
   }
 
   __syncthreads();
 
-  for (size_t idx = tid; idx < nnz; idx += n_thread) {
-    IDX_TYPE row = d_row[tid];
-    IDX_TYPE col = d_col[tid];
-    NUM_TYPE val = values[tid];
+  for (size_t idx = id_thread; idx < nnz; idx += n_thread) {
+    IDX_TYPE row = d_row[idx];
+    IDX_TYPE col = d_col[idx];
+    NUM_TYPE val = values[idx];
 
     NUM_TYPE product = val * x[col];
 
     // Each thread writes its product in shared memory for reduction
-    atomicAdd(&sdata[idx % MAX_BLOCK_SIZE], product);
+    atomicAdd(&shared_pref_sum[idx % MAX_BLOCK_SIZE], product);
   }
 
-  __syncthreads();
+  //__syncthreads();
 
   // Cooperative intra-warp reduction:
 
   // Use the first thread in the block for each unique row to accumulate
   // partial sums This reduces the number of atomicAdds
-  float sum = sdata[threadIdx.x];
+  // float sum = sdata[threadIdx.x];
 
   // atomicAdd on global y
-  atomicAdd(&y[row], sum);
+  // atomicAdd(&y[row], sum);
 }
 
 __global__ void spmv_coo_shfl_unroll(const IDX_TYPE *__restrict__ d_rows,
@@ -80,28 +77,26 @@ __global__ void spmv_coo_shfl_unroll(const IDX_TYPE *__restrict__ d_rows,
 
     NUM_TYPE product = val * d_array[col];
 
-    // Do warp-level segmented reduction
-    NUM_TYPE sum = product;
-
 // Compare row ids between threads in warp
 #pragma unroll
+    // Compare row ids between threads in warp
     for (size_t delta = 1; delta < WARP_SIZE; delta <<= 2) {
       NUM_TYPE prev_row = __shfl_up_sync(FULL_WARP_MASK, row, delta);
-      NUM_TYPE prev_sum = __shfl_up_sync(FULL_WARP_MASK, sum, delta);
+      NUM_TYPE prev_product = __shfl_up_sync(FULL_WARP_MASK, product, delta);
 
       // If the current thread has a lane (warp position) greater top the
       // current offset
       if (lane >= delta && prev_row == row) {
-        sum += prev_sum;
+        product += prev_product;
       }
     }
 
     // The last thread in a row segment writes the result
-    int row_next_bcast = __shfl_down_sync(FULL_WARP_MASK, row, 1);
+    size_t row_next_bcast = __shfl_down_sync(FULL_WARP_MASK, row, 1);
 
     if (row != row_next_bcast) {
       // only one thread writes out to global memory
-      atomicAdd(&d_res[row], sum);
+      atomicAdd(&d_res[row], product);
     }
   }
 }
@@ -123,27 +118,24 @@ __global__ void spmv_coo_shfl(const IDX_TYPE *__restrict__ d_rows,
 
     NUM_TYPE product = val * d_array[col];
 
-    // Do warp-level segmented reduction
-    NUM_TYPE sum = product;
-
     // Compare row ids between threads in warp
     for (size_t delta = 1; delta < WARP_SIZE; delta <<= 2) {
       NUM_TYPE prev_row = __shfl_up_sync(FULL_WARP_MASK, row, delta);
-      NUM_TYPE prev_sum = __shfl_up_sync(FULL_WARP_MASK, sum, delta);
+      NUM_TYPE prev_product = __shfl_up_sync(FULL_WARP_MASK, product, delta);
 
       // If the current thread has a lane (warp position) greater top the
       // current offset
       if (lane >= delta && prev_row == row) {
-        sum += prev_sum;
+        product += prev_product;
       }
     }
 
     // The last thread in a row segment writes the result
-    int row_next_bcast = __shfl_down_sync(FULL_WARP_MASK, row, 1);
+    size_t row_next_bcast = __shfl_down_sync(FULL_WARP_MASK, row, 1);
 
     if (row != row_next_bcast) {
       // only one thread writes out to global memory
-      atomicAdd(&d_res[row], sum);
+      atomicAdd(&d_res[row], product);
     }
   }
 }

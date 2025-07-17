@@ -14,13 +14,21 @@
 #define MAX_GRID_SIZE 256
 #define NUM_TEST 5
 #define WARM_UP_RUN 5
-#define OPS_PER_NUN 2
-#define MEMEORY_RW 5
+#define WARP_SIZE 32
+#define FULL_WARP_MASK 0xffffffff
+#define OPS_PER_NUN_BASELINE 2
+#define MEMEORY_RW_BASELINE 5
+#define OPS_PER_NUN_WARP_SHFL 6
+#define MEMEORY_RW_WARP_SHFL 5
+#define OPS_PER_NUN_WARP_SHFL_UNROLL 18
+#define MEMEORY_RW_WARP_SHFL_UNROLL 5
 
-#define CEILING(x, y) (((x) + (y) - 1) / (y))
+#define CEILING(X, Y) (((X) + (Y) - 1) / (Y))
 
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 #define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
+
+#define LOG_WARP log(WARP_SIZE)
 
 #define CHECK_CUDA(call)                                                       \
   if ((call) != cudaSuccess) {                                                 \
@@ -85,9 +93,39 @@ float sigma_fn(const float *v, float mu, size_t n) {
   return sqrt(sum / n);
 }
 
-double flops_counter(size_t nnz, float ms) {
-  size_t flops = OPS_PER_NUN * nnz;
+double flops_counter(kernel_type kernel, size_t nnz, float ms) {
+  size_t flops = 0;
+  switch (kernel) {
+  case BASELINE:
+    flops = OPS_PER_NUN_BASELINE * nnz;
+    break;
+  case WARP_SHFL:
+  case WARP_SHFL_UNROLL:
+    flops = nnz * (2 + LOG_WARP);
+    break;
+  }
   return (flops / (ms / 1.e3)) / 1.e9;
+}
+
+size_t memory_r_w(kernel_type kernel) {
+  size_t ret = 0;
+  switch (kernel) {
+  case BASELINE:
+    ret = MEMEORY_RW_BASELINE;
+    break;
+  case WARP_SHFL:
+    ret = MEMEORY_RW_WARP_SHFL;
+    break;
+  case WARP_SHFL_UNROLL:
+    ret = MEMEORY_RW_WARP_SHFL_UNROLL;
+    break;
+  }
+  return ret;
+}
+
+float bandwidth_counter(const kernel_type kernel, const size_t nnz,
+                        const float milliseconds) {
+  return (nnz * sizeof(NUM_TYPE) * memory_r_w(kernel) / milliseconds) / 1e12;
 }
 
 void compute_results(const float *times, const float *flops,
@@ -116,10 +154,9 @@ void compute_results(const float *times, const float *flops,
 
 void populate_d_arrays(const COO_local<IDX_TYPE, NUM_TYPE> *sparse_matrix,
                        NUM_TYPE *d_vals, IDX_TYPE *d_rows, IDX_TYPE *d_cols) {
-  // IMPORTANT inversion of column and rows to have a row major COO
   for (size_t i = 0; i < sparse_matrix->nnz; ++i) {
     d_vals[i] = sparse_matrix->val[i];
-    d_rows[i] = sparse_matrix->col[i];
-    d_cols[i] = sparse_matrix->row[i];
+    d_rows[i] = sparse_matrix->row[i];
+    d_cols[i] = sparse_matrix->col[i];
   }
 }

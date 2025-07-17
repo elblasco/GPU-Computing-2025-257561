@@ -24,8 +24,8 @@ fi
 source SbatchMan/submit.sh
 my_hostname=$(${SbM_UTILS}/hostname.sh)
 
-for file in $MTX_PATH/*.sbmtx; do
+for file in "$MTX_PATH"/*.sbmtx; do
     echo "----- Testing '$(basename "${file%.*}")' graph -----"
-    SbM_submit_function --verbose --expname "$COO_SPMV_$(basename $file)" --binary $BIN -f "$file"# -n $ITERATIONS
+    SbM_submit_function --verbose --expname "$COO_SPMV_$(basename $file)" --binary $BIN -f "$file" # -n $ITERATIONS
     echo "JOB ID: ${job_id}"
 done

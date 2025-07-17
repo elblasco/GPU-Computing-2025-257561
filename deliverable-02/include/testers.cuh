@@ -2,6 +2,21 @@
 
 #include "gpu.cuh"
 #include "utils.cuh"
+#include "colours.h"
+#include <cmath>
+#include <csignal>
+#include <cstddef>
+
+NUM_TYPE *quality_assurance(const NUM_TYPE *d_coo_vals, const IDX_TYPE *d_rows,
+                            const IDX_TYPE *d_cols,
+                            const NUM_TYPE *d_dense_array, const size_t nnz,
+                            const size_t nrows, const size_t portion,
+                            const size_t grid_size, const size_t block_size) {
+  CUDA_MANGED_MALLOC(d_res_array, NUM_TYPE, nrows);
+  spmv_with_striding<<<grid_size, block_size>>>(
+      d_rows, d_cols, d_coo_vals, d_dense_array, d_res_array, nnz, portion);
+  return d_res_array;
+}
 
 void test_spmv(const COO_local<IDX_TYPE, NUM_TYPE> *sparse_matrix,
                kernel_type kernel) {
@@ -23,9 +38,8 @@ void test_spmv(const COO_local<IDX_TYPE, NUM_TYPE> *sparse_matrix,
   size_t portion = CEILING(nnz, (block_size * grid_size));
 
   for (size_t run = 0; run < NUM_TEST + WARM_UP_RUN; run++) {
-    // IMPORTANT inversion of column and rows to have a row major COO
-    CUDA_MANGED_MALLOC(d_res_array, NUM_TYPE, sparse_matrix->ncols);
-    CUDA_MANGED_MALLOC(d_dense_array, NUM_TYPE, sparse_matrix->nrows);
+    CUDA_MANGED_MALLOC(d_res_array, NUM_TYPE, sparse_matrix->nrows);
+    CUDA_MANGED_MALLOC(d_dense_array, NUM_TYPE, sparse_matrix->ncols);
 
     for (size_t j = 0; j < MAX(sparse_matrix->nrows, sparse_matrix->ncols);
          ++j) {
@@ -73,15 +87,22 @@ void test_spmv(const COO_local<IDX_TYPE, NUM_TYPE> *sparse_matrix,
     float milliseconds = CUDA_TIMER_ELAPSED(gpu_time);
 
     if (WARM_UP_RUN <= run) {
-      flops[run - WARM_UP_RUN] = flops_counter(nnz, milliseconds);
+      flops[run - WARM_UP_RUN] = flops_counter(kernel, nnz, milliseconds);
       times[run - WARM_UP_RUN] = milliseconds;
       bandwidth[run - WARM_UP_RUN] =
-          (nnz * sizeof(NUM_TYPE) * MEMEORY_RW / milliseconds) / 1e12;
-    }
+          bandwidth_counter(kernel, nnz, milliseconds);
 
-    for (size_t x = 0; x < sparse_matrix->ncols; x++) {
-      if (d_res_array[x] != 0) {
-        printf("At index %lu result contains %f\n", x, d_res_array[x]);
+      NUM_TYPE *test_result = quality_assurance(
+          d_vals, d_rows, d_cols, d_dense_array, nnz, sparse_matrix->nrows,
+          portion, grid_size, block_size);
+
+      for (size_t x = 0; x < sparse_matrix->nrows; x++) {
+        if (fabs(d_res_array[x] - test_result[x]) > 0.0005) {
+          printf("At index %lu result contains %f\n", x, d_res_array[x]);
+        }
+		if(x == 1000){
+		  printf(GREEN "Everything is fine" RESET "\n");
+		}
       }
     }
 
