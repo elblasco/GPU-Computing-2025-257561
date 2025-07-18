@@ -1,8 +1,3 @@
-## !! PLEASE MODIFY THE VALUE OF "GROUP_NAME"
-## Write here the name of your group
-## Please use the name you submitted in the registration form
-## !!
-
 RED='\033[0;31m'
 PUR='\033[0;35m'
 GRE='\033[0;32m'
