@@ -20,7 +20,7 @@
 #define MEMEORY_RW_BASELINE 5
 #define OPS_PER_NUN_WARP_SHFL 6
 #define MEMEORY_RW_WARP_SHFL 5
-#define OPS_PER_NUN_WARP_SHFL_UNROLL 18
+#define OPS_PER_NUN_WARP_SHFL_UNROLL 6
 #define MEMEORY_RW_WARP_SHFL_UNROLL 5
 
 #define CEILING(X, Y) (((X) + (Y) - 1) / (Y))
@@ -75,7 +75,7 @@
 #define CUDA_TIMER_CLOSE(name)                                                 \
   CUDA_TIMER_STOP(name) CUDA_TIMER_PRINT(name) CUDA_TIMER_DESTROY(name)
 
-enum kernel_type { BASELINE, WARP_SHFL, WARP_SHFL_UNROLL };
+enum kernel_type { BASELINE, WARP_SHFL, WARP_SHFL_UNROLL, SHARED_MEMORY_SUM, CUSPARSE };
 
 double geometric_mean(const float *arr, size_t n) {
   float product = 1;
@@ -107,26 +107,27 @@ double flops_counter(kernel_type kernel, size_t nnz, float ms) {
   return (flops / (ms / 1.e3)) / 1.e9;
 }
 
-size_t memory_r_w(kernel_type kernel) {
-  size_t ret = 0;
-  switch (kernel) {
-  case BASELINE:
-    ret = MEMEORY_RW_BASELINE;
-    break;
-  case WARP_SHFL:
-    ret = MEMEORY_RW_WARP_SHFL;
-    break;
-  case WARP_SHFL_UNROLL:
-    ret = MEMEORY_RW_WARP_SHFL_UNROLL;
-    break;
-  }
-  return ret;
-}
-
 float bandwidth_counter(const kernel_type kernel, const size_t nnz,
                         const float milliseconds) {
-  return (nnz * sizeof(NUM_TYPE) * memory_r_w(kernel) / milliseconds) / 1e12;
+  float total_memory_rw = 0;
+  switch (kernel) {
+  case BASELINE:
+    total_memory_rw = nnz * MEMEORY_RW_BASELINE;
+    break;
+  case WARP_SHFL:
+    total_memory_rw = nnz * MEMEORY_RW_WARP_SHFL;
+    break;
+  case WARP_SHFL_UNROLL:
+    total_memory_rw = nnz * MEMEORY_RW_WARP_SHFL_UNROLL;
+    break;
+  }
+  return (sizeof(NUM_TYPE) * total_memory_rw / milliseconds) / 1e12;
 }
+
+// float bandwidth_counter(const kernel_type kernel, const size_t nnz,
+//                         const float milliseconds) {
+//   return (nnz * sizeof(NUM_TYPE) * memory_r_w(kernel) / milliseconds) / 1e12;
+// }
 
 void compute_results(const float *times, const float *flops,
                      const float *bandwidth) {
@@ -158,5 +159,16 @@ void populate_d_arrays(const COO_local<IDX_TYPE, NUM_TYPE> *sparse_matrix,
     d_vals[i] = sparse_matrix->val[i];
     d_rows[i] = sparse_matrix->row[i];
     d_cols[i] = sparse_matrix->col[i];
+  }
+}
+
+void validate_result(const NUM_TYPE *d_res_array, const NUM_TYPE *test_result) {
+  for (size_t x = 0; x <= 1000; x++) {
+      if (fabs(d_res_array[x] - test_result[x]) > 0.0005) {
+        printf("At index %lu result contains %f while the test contains %f\n",
+               x, d_res_array[x], test_result[x]);
+      } else if (x == 1000) {
+        printf(GREEN "Everything is fine" RESET "\n");
+      }
   }
 }

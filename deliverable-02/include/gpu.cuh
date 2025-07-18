@@ -2,6 +2,22 @@
 
 #include "utils.cuh"
 
+__device__ void matrix_edges_cases(NUM_TYPE *d_res,
+                                   const NUM_TYPE *shared_prefix,
+                                   const IDX_TYPE *d_row, const size_t nnz,
+                                   const size_t iteration,
+                                   const size_t offset_from_start) {
+  IDX_TYPE idx = (iteration * blockDim.x) + threadIdx.x;
+  IDX_TYPE row_idx = d_row[offset_from_start + idx];
+  IDX_TYPE row_next_idx = d_row[offset_from_start + idx + 1];
+  if (idx + 1 == blockDim.x || offset_from_start + idx + 1 == nnz) {
+    atomicAdd(&d_res[row_idx], shared_prefix[idx]);
+  } else if (row_idx < row_next_idx) {
+    atomicAdd(&d_res[row_idx], shared_prefix[idx]);
+    atomicAdd(&d_res[row_next_idx], -shared_prefix[idx]);
+  }
+}
+
 __global__ void spmv_with_striding(const IDX_TYPE __restrict__ *row,
                                    const IDX_TYPE __restrict__ *col,
                                    const NUM_TYPE *val, const NUM_TYPE *arr,
@@ -18,45 +34,57 @@ __global__ void spmv_with_striding(const IDX_TYPE __restrict__ *row,
   }
 }
 
-__global__ void spmv_coo_kernel_shared(const IDX_TYPE __restrict__ *d_row,
-                                       const IDX_TYPE __restrict__ *d_col,
-                                       const NUM_TYPE *values,
-                                       const NUM_TYPE *x, NUM_TYPE *y,
-                                       const NUM_TYPE nnz,
-                                       const NUM_TYPE num_rows) {
-  __shared__ NUM_TYPE shared_pref_sum[MAX_BLOCK_SIZE];
+#define ELEM_PER_THREAD 2
+__global__ void shared_prefix_sum(const IDX_TYPE *d_row, const IDX_TYPE *d_col,
+                                  const NUM_TYPE *d_val,
+                                  const NUM_TYPE *d_dense_vec,
+                                  NUM_TYPE *d_result, const IDX_TYPE nnz) {
+  extern __shared__ NUM_TYPE shared_prefix[];
+  size_t read_per_block = blockDim.x * ELEM_PER_THREAD;
 
-  size_t id_thread = threadIdx.x + blockIdx.x * blockDim.x;
-  size_t n_thread = blockDim.x * gridDim.x;
+  // Each block does `read_per_block` consecutive elements
+  size_t offset_from_start = blockIdx.x * read_per_block;
 
-  // Initialize shared memory
-  if (threadIdx.x < MAX_BLOCK_SIZE) {
-    shared_pref_sum[threadIdx.x] = 0.0f;
+  // Each thread multiplies `ELEM_PER_THREAD` into shared memory
+  for (size_t i = 0; i < ELEM_PER_THREAD; i++) {
+    size_t idx = (i * blockDim.x) + threadIdx.x;
+    if (offset_from_start + idx < nnz) {
+      // `d_col[offset_from_start + idx]` is the current column
+      shared_prefix[idx] = d_val[offset_from_start + idx] *
+                           d_dense_vec[d_col[offset_from_start + idx]];
+    } else {
+      shared_prefix[idx] = 0;
+    }
   }
 
   __syncthreads();
 
-  for (size_t idx = id_thread; idx < nnz; idx += n_thread) {
-    IDX_TYPE row = d_row[idx];
-    IDX_TYPE col = d_col[idx];
-    NUM_TYPE val = values[idx];
-
-    NUM_TYPE product = val * x[col];
-
-    // Each thread writes its product in shared memory for reduction
-    atomicAdd(&shared_pref_sum[idx % MAX_BLOCK_SIZE], product);
+  // For every thread in the block (except the first)
+  // iterate over its sum and
+  for (IDX_TYPE s = 1; s < (read_per_block / ELEM_PER_THREAD); s <<= 1) {
+    for (size_t i = 0; i < ELEM_PER_THREAD; i++) {
+      size_t idx = (i * blockDim.x) + threadIdx.x;
+      if (idx + s < read_per_block) {
+        // printf("Thread %d has a shared sum of %f at index %lu (the original
+        // "
+        //        "matrix was [%lu][%lu] with value %f), now it will update "
+        //        "shared with index %u which has value of %f to value %f\n",
+        //        threadIdx.x, shared_prefix[idx], idx,
+        //        d_row[offset_from_start + idx], d_col[offset_from_start +
+        //        idx], d_val[offset_from_start + idx], s + idx,
+        //        shared_prefix[idx + s], shared_prefix[idx + s] +
+        //        shared_prefix[idx]);
+        shared_prefix[idx + s] += shared_prefix[idx];
+      }
+    }
+    __syncthreads();
   }
 
-  //__syncthreads();
-
-  // Cooperative intra-warp reduction:
-
-  // Use the first thread in the block for each unique row to accumulate
-  // partial sums This reduces the number of atomicAdds
-  // float sum = sdata[threadIdx.x];
-
-  // atomicAdd on global y
-  // atomicAdd(&y[row], sum);
+  // Memory write
+  for (size_t i = 0; i < ELEM_PER_THREAD; i++) {
+    matrix_edges_cases(d_result, shared_prefix, d_row, nnz, i,
+                       offset_from_start);
+  }
 }
 
 __global__ void spmv_coo_shfl_unroll(const IDX_TYPE *__restrict__ d_rows,
