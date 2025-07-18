@@ -4,12 +4,14 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cuda_runtime.h>
+#include <cusparse.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 #define NUM_TYPE float
-#define IDX_TYPE uint64_t
+#define IDX_TYPE size_t
 #define MAX_BLOCK_SIZE 128
 #define MAX_GRID_SIZE 256
 #define NUM_TEST 5
@@ -33,6 +35,12 @@
 #define CHECK_CUDA(call)                                                       \
   if ((call) != cudaSuccess) {                                                 \
     fprintf(stderr, "CUDA error at %s:%u\n", __FILE__, __LINE__);              \
+    exit(1);                                                                   \
+  }
+#define CHECK_CUSPARSE(func)                                                   \
+  if ((func) != CUSPARSE_STATUS_SUCCESS) {                                     \
+    printf("cuSPARSE API failed at line %d with error: %d\n", __LINE__,        \
+           status);                                                            \
     exit(1);                                                                   \
   }
 
@@ -75,7 +83,13 @@
 #define CUDA_TIMER_CLOSE(name)                                                 \
   CUDA_TIMER_STOP(name) CUDA_TIMER_PRINT(name) CUDA_TIMER_DESTROY(name)
 
-enum kernel_type { BASELINE, WARP_SHFL, WARP_SHFL_UNROLL, SHARED_MEMORY_SUM, CUSPARSE };
+enum kernel_type {
+  BASELINE,
+  WARP_SHFL,
+  WARP_SHFL_UNROLL,
+  SHARED_MEMORY_SUM,
+  CUSPARSE
+};
 
 double geometric_mean(const float *arr, size_t n) {
   float product = 1;
@@ -164,11 +178,11 @@ void populate_d_arrays(const COO_local<IDX_TYPE, NUM_TYPE> *sparse_matrix,
 
 void validate_result(const NUM_TYPE *d_res_array, const NUM_TYPE *test_result) {
   for (size_t x = 0; x <= 1000; x++) {
-      if (fabs(d_res_array[x] - test_result[x]) > 0.0005) {
-        printf("At index %lu result contains %f while the test contains %f\n",
-               x, d_res_array[x], test_result[x]);
-      } else if (x == 1000) {
-        printf(GREEN "Everything is fine" RESET "\n");
-      }
+    if (fabs(d_res_array[x] - test_result[x]) > 0.0005) {
+      printf("At index %lu result contains %f while the test contains %f\n", x,
+             d_res_array[x], test_result[x]);
+    } else if (x == 1000) {
+      printf(GREEN "Everything is fine" RESET "\n");
+    }
   }
 }

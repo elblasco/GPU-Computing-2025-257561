@@ -6,6 +6,7 @@
 #include <cmath>
 #include <csignal>
 #include <cstddef>
+#include <cuda_runtime.h>
 #include <cusparse.h>
 
 NUM_TYPE *quality_assurance(const NUM_TYPE *d_coo_vals, const IDX_TYPE *d_rows,
@@ -89,51 +90,43 @@ void test_spmv(const COO_local<IDX_TYPE, NUM_TYPE> *sparse_matrix,
       CUDA_TIMER_STOP(gpu_time);
       break;
     case CUSPARSE:
-      cusparseHandle_t *handle = NULL;
-      cusparseCreate(handle);
+      cusparseHandle_t handle = NULL;
+      cusparseCreate(&handle);
 
       cusparseConstDnVecDescr_t dense = NULL;
       cusparseDnVecDescr_t res = NULL;
-      cusparseConstDnVecGet(dense, &sparse_matrix->ncols, d_dense_array,
-                            CUDA_R_32F);
 
-      cusparseDnVecGet(res, sparse_matrix->nrows, d_res_array, CUDA_R_32F);
+      IDX_TYPE ncols = sparse_matrix->ncols;
+      IDX_TYPE nrows = sparse_matrix->nrows;
+      cusparseCreateConstDnVec(&dense, ncols, (void *)d_dense_array,
+                               CUDA_R_32F);
+
+      cusparseCreateDnVec(&res, nrows, d_res_array, CUDA_R_32F);
 
       cusparseConstSpMatDescr_t *spMatDescr = NULL;
-      cusparseCreateConstCoo(spMatDescr, &sparse_matrix->nrows,
-                             sparse_matrix->ncols, sparse_matrix->nnz, d_rows,
-                             d_cols, d_vals, CUSPARSE_INDEX_64I,
+      cusparseCreateConstCoo(spMatDescr, nrows, ncols, nnz, d_rows, d_cols,
+                             d_vals, CUSPARSE_INDEX_64I,
                              CUSPARSE_INDEX_BASE_ZERO, CUDA_R_32F);
 
       size_t buffer_size = 0;
 
-      cusparseSpMV_bufferSize(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, 1,
-                              spMatDescr, dense, 1, res, CUDA_R_32F,
-                              CUSPARSE_SPMV_ALG_DEFAULT, &buffer_size);
+      cusparseSpMV_bufferSize(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
+                              (void *)1, *spMatDescr, dense, (void *)1, res,
+                              CUDA_R_32F, CUSPARSE_SPMV_ALG_DEFAULT,
+                              &buffer_size);
 
       CUDA_MANGED_MALLOC(buffer, NUM_TYPE, buffer_size);
 
-      cusparseSpMV_preprocess(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, 1,
-                              spMatDescr, dense, 1, res, CUDA_R_32F,
-                              CUSPARSE_SPMV_ALG_DEFAULT, buffer);
+      cusparseSpMV_preprocess(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
+                              (void *)1, *spMatDescr, dense, (void *)1, res,
+                              CUDA_R_32F, CUSPARSE_SPMV_ALG_DEFAULT, buffer);
 
-      cusparseSpMV(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, 1, spMatDescr,
-                   dense, 1, res, CUDA_R_32F, CUSPARSE_SPMV_ALG_DEFAULT,
-                   buffer);
-
-      // cusparseSpMV(cusparseHandle_t          handle,
-      //        cusparseOperation_t       opA,
-      //        const void*               alpha,
-      //        cusparseConstSpMatDescr_t matA,  // non-const descriptor
-      //        supported cusparseConstDnVecDescr_t vecX,  // non-const
-      //        descriptor supported const void*               beta,
-      //        cusparseDnVecDescr_t      vecY,
-      //        cudaDataType              computeType,
-      //        cusparseSpMVAlg_t         alg,
-      //        void*                     externalBuffer)
+      cusparseSpMV(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, (void *)1,
+                   *spMatDescr, dense, (void *)1, res, CUDA_R_32F,
+                   CUSPARSE_SPMV_ALG_DEFAULT, buffer);
 
       CUDA_FREE(buffer);
-      cusparseDestroySpMat(spMatDescr);
+      cusparseDestroySpMat(*spMatDescr);
       cusparseDestroyDnVec(dense);
       cusparseDestroyDnVec(res);
       break;
