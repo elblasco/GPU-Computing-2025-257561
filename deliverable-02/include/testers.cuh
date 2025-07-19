@@ -90,45 +90,81 @@ void test_spmv(const COO_local<IDX_TYPE, NUM_TYPE> *sparse_matrix,
       CUDA_TIMER_STOP(gpu_time);
       break;
     case CUSPARSE:
+      NUM_TYPE alpha = 1.0, beta = 1.0;
       cusparseHandle_t handle = NULL;
-      cusparseCreate(&handle);
+      printf("Creating the cusparse handler\n");
+      fflush(stdout);
+      CHECK_CUSPARSE(cusparseCreate(&handle));
 
       cusparseConstDnVecDescr_t dense = NULL;
       cusparseDnVecDescr_t res = NULL;
 
       IDX_TYPE ncols = sparse_matrix->ncols;
       IDX_TYPE nrows = sparse_matrix->nrows;
+      printf("Creating the const vec\n");
+      fflush(stdout);
       cusparseCreateConstDnVec(&dense, ncols, (void *)d_dense_array,
                                CUDA_R_32F);
 
+      printf("Creating the result vec\n");
+      fflush(stdout);
       cusparseCreateDnVec(&res, nrows, d_res_array, CUDA_R_32F);
 
-      cusparseConstSpMatDescr_t *spMatDescr = NULL;
-      cusparseCreateConstCoo(spMatDescr, nrows, ncols, nnz, d_rows, d_cols,
+      printf("Creating the const matrix\n");
+      fflush(stdout);
+      cusparseConstSpMatDescr_t spMatDescr = NULL;
+      cusparseCreateConstCoo(&spMatDescr, nrows, ncols, nnz, d_rows, d_cols,
                              d_vals, CUSPARSE_INDEX_64I,
                              CUSPARSE_INDEX_BASE_ZERO, CUDA_R_32F);
 
       size_t buffer_size = 0;
 
-      cusparseSpMV_bufferSize(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
-                              (void *)1, *spMatDescr, dense, (void *)1, res,
-                              CUDA_R_32F, CUSPARSE_SPMV_ALG_DEFAULT,
-                              &buffer_size);
+      printf("Computing the buffer size\n");
+      fflush(stdout);
+      cusparseSpMV_bufferSize(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, &alpha,
+                              spMatDescr, dense, &beta, res, CUDA_R_32F,
+                              CUSPARSE_SPMV_ALG_DEFAULT, &buffer_size);
 
-      CUDA_MANGED_MALLOC(buffer, NUM_TYPE, buffer_size);
+      printf("The buffer size id %lu\n", buffer_size);
+      fflush(stdout);
 
-      cusparseSpMV_preprocess(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
-                              (void *)1, *spMatDescr, dense, (void *)1, res,
-                              CUDA_R_32F, CUSPARSE_SPMV_ALG_DEFAULT, buffer);
+      void *buffer = NULL;
+      CHECK_CUDA(cudaMalloc(&buffer, buffer_size));
 
-      cusparseSpMV(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, (void *)1,
-                   *spMatDescr, dense, (void *)1, res, CUDA_R_32F,
-                   CUSPARSE_SPMV_ALG_DEFAULT, buffer);
+      printf("Preprocess the matrix\n");
+      fflush(stdout);
+      cusparseSpMV_preprocess(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, &alpha,
+                              spMatDescr, dense, &beta, res, CUDA_R_32F,
+                              CUSPARSE_SPMV_ALG_DEFAULT, buffer);
 
-      CUDA_FREE(buffer);
-      cusparseDestroySpMat(*spMatDescr);
-      cusparseDestroyDnVec(dense);
-      cusparseDestroyDnVec(res);
+      printf("Doing the multiplication\n");
+      fflush(stdout);
+      cusparseSpMV(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, &alpha, spMatDescr,
+                   dense, &beta, res, CUDA_R_32F, CUSPARSE_SPMV_ALG_DEFAULT,
+                   buffer);
+
+      printf("Finished the multiplication\n");
+      fflush(stdout);
+
+      if (buffer_size > 0) {
+        printf("Freeing the buffer memory\n");
+        fflush(stdout);
+        CUDA_FREE(buffer);
+      }
+
+      printf("Freeing the matrix\n");
+      fflush(stdout);
+      CHECK_CUSPARSE(cusparseDestroySpMat(spMatDescr));
+
+      printf("Freeing the const dense vector\n");
+      fflush(stdout);
+      CHECK_CUSPARSE(cusparseDestroyDnVec(dense));
+
+      printf("Freeing the result vector\n");
+      fflush(stdout);
+      CHECK_CUSPARSE(cusparseDestroyDnVec(res));
+
+      CHECK_CUSPARSE(cusparseDestroy(handle));
       break;
     }
 
