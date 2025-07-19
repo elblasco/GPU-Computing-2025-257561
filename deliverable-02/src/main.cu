@@ -15,17 +15,21 @@ int main(int argc, char **argv) {
       Distr_MMIO_sorted_COO_local_read<IDX_TYPE, NUM_TYPE>(args.filename,
                                                            false);
 
-  // printf(RED "Now running the baseline" RESET "\n");
+  // printf(GREEN "Now running the baseline" RESET "\n");
   // test_spmv(coo_matrix, kernel_type::BASELINE);
 
-  // printf(RED "Now running the warp shuffle" RESET "\n");
+  // printf(GREEN "Now running the warp shuffle" RESET "\n");
   // test_spmv(coo_matrix, kernel_type::WARP_SHFL);
 
-  // printf(RED "Now running the warp shuffle with unroll" RESET "\n");
+  // printf(GREEN "Now running the warp shuffle with unroll" RESET "\n");
   // test_spmv(coo_matrix, kernel_type::WARP_SHFL_UNROLL);
 
-  printf(RED "Now running the shared memory " RESET "\n");
-  test_spmv(coo_matrix, kernel_type::SHARED_MEMORY_SUM);
-  
+  // printf(GREEN "Now running the shared memory " RESET "\n");
+  // test_spmv(coo_matrix, kernel_type::SHARED_MEMORY_SUM);
+
+  printf(GREEN "Now running the cusprse default algorithm " RESET "\n");
+  fflush(stdout);
+  test_spmv(coo_matrix, kernel_type::CUSPARSE);
+
   return 0;
 }
