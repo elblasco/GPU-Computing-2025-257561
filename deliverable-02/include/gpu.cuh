@@ -94,7 +94,8 @@ __global__ void spmv_coo_shfl_unroll(const IDX_TYPE *__restrict__ d_rows,
                                      NUM_TYPE *__restrict__ d_res,
                                      IDX_TYPE nnz) {
   size_t thread_id = threadIdx.x + blockDim.x * blockIdx.x;
-  size_t lane = threadIdx.x % WARP_SIZE;
+  // size_t lane = threadIdx.x % WARP_SIZE;
+  size_t position_in_line = threadIdx.x & (WARP_SIZE - 1);
 
   size_t total_threads = gridDim.x * blockDim.x;
 
@@ -108,13 +109,13 @@ __global__ void spmv_coo_shfl_unroll(const IDX_TYPE *__restrict__ d_rows,
 // Compare row ids between threads in warp
 #pragma unroll
     // Compare row ids between threads in warp
-    for (size_t delta = 1; delta < WARP_SIZE; delta <<= 2) {
+    for (size_t delta = 1; delta < WARP_SIZE; delta <<= 1) {
       NUM_TYPE prev_row = __shfl_up_sync(FULL_WARP_MASK, row, delta);
       NUM_TYPE prev_product = __shfl_up_sync(FULL_WARP_MASK, product, delta);
 
       // If the current thread has a lane (warp position) greater top the
       // current offset
-      if (lane >= delta && prev_row == row) {
+      if (position_in_line >= delta && prev_row == row) {
         product += prev_product;
       }
     }
@@ -122,7 +123,8 @@ __global__ void spmv_coo_shfl_unroll(const IDX_TYPE *__restrict__ d_rows,
     // The last thread in a row segment writes the result
     size_t row_next_bcast = __shfl_down_sync(FULL_WARP_MASK, row, 1);
 
-    if (row != row_next_bcast) {
+    if (row <= row_next_bcast || position_in_line + 1 == WARP_SIZE ||
+        position_in_line + 1 == nnz) {
       // only one thread writes out to global memory
       atomicAdd(&d_res[row], product);
     }
@@ -135,7 +137,7 @@ __global__ void spmv_coo_shfl(const IDX_TYPE *__restrict__ d_rows,
                               const NUM_TYPE *__restrict__ d_array,
                               NUM_TYPE *__restrict__ d_res, IDX_TYPE nnz) {
   size_t thread_id = threadIdx.x + blockDim.x * blockIdx.x;
-  size_t lane = threadIdx.x % WARP_SIZE;
+  size_t position_in_line = threadIdx.x & (WARP_SIZE - 1);
 
   size_t total_threads = gridDim.x * blockDim.x;
 
@@ -147,13 +149,13 @@ __global__ void spmv_coo_shfl(const IDX_TYPE *__restrict__ d_rows,
     NUM_TYPE product = val * d_array[col];
 
     // Compare row ids between threads in warp
-    for (size_t delta = 1; delta < WARP_SIZE; delta <<= 2) {
+    for (size_t delta = 1; delta < WARP_SIZE; delta <<= 1) {
       NUM_TYPE prev_row = __shfl_up_sync(FULL_WARP_MASK, row, delta);
       NUM_TYPE prev_product = __shfl_up_sync(FULL_WARP_MASK, product, delta);
 
       // If the current thread has a lane (warp position) greater top the
       // current offset
-      if (lane >= delta && prev_row == row) {
+      if (position_in_line >= delta && prev_row == row) {
         product += prev_product;
       }
     }
@@ -161,7 +163,8 @@ __global__ void spmv_coo_shfl(const IDX_TYPE *__restrict__ d_rows,
     // The last thread in a row segment writes the result
     size_t row_next_bcast = __shfl_down_sync(FULL_WARP_MASK, row, 1);
 
-    if (row != row_next_bcast) {
+    if (row <= row_next_bcast || position_in_line + 1 == WARP_SIZE ||
+        position_in_line + 1 == nnz) {
       // only one thread writes out to global memory
       atomicAdd(&d_res[row], product);
     }

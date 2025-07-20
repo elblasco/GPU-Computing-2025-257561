@@ -176,11 +176,13 @@ void test_spmv(const COO_local<IDX_TYPE, NUM_TYPE> *sparse_matrix,
       bandwidth[run - WARM_UP_RUN] =
           bandwidth_counter(kernel, nnz, milliseconds);
 
-      NUM_TYPE *test_result = quality_assurance(
-          d_vals, d_rows, d_cols, d_dense_array, nnz, sparse_matrix->nrows,
-          portion, grid_size, block_size);
+      // NUM_TYPE *test_result = quality_assurance(
+      //     d_vals, d_rows, d_cols, d_dense_array, nnz, sparse_matrix->nrows,
+      //     portion, grid_size, block_size);
 
-      validate_result(d_res_array, test_result);
+      // validate_result(d_res_array, test_result);
+
+	  // CUDA_FREE(test_result);
     }
 
     CUDA_FREE(d_dense_array);

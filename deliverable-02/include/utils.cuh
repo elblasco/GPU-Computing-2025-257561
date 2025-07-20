@@ -32,16 +32,26 @@
 
 #define LOG_WARP log(WARP_SIZE)
 
-#define CHECK_CUDA(call)                                                       \
-  if ((call) != cudaSuccess) {                                                 \
-    fprintf(stderr, "CUDA error at %s:%u\n", __FILE__, __LINE__);              \
-    exit(1);                                                                   \
+#define CHECK_CUDA(func)                                                       \
+  {                                                                            \
+    cudaError_t status = (func);                                               \
+    if (status != cudaSuccess) {                                               \
+      fprintf(stderr, RED "CUDA error: %s\n" RESET,                            \
+              cudaGetErrorString(status));                                     \
+      fflush(stderr);                                                          \
+      exit(-1);                                                                \
+    }                                                                          \
   }
+
 #define CHECK_CUSPARSE(func)                                                   \
-  if ((func) != CUSPARSE_STATUS_SUCCESS) {                                     \
-    printf("cuSPARSE API failed at line %d with error: %d\n", __LINE__,        \
-           status);                                                            \
-    exit(1);                                                                   \
+  {                                                                            \
+    cusparseStatus_t status = (func);                                          \
+    if (status != CUSPARSE_STATUS_SUCCESS) {                                   \
+      fprintf(stderr, RED "cuSPARSE error at %d: %d\n" RESET, __LINE__,        \
+              status);                                                         \
+      fflush(stderr);                                                          \
+      exit(-1);                                                                \
+    }                                                                          \
   }
 
 #define CUDA_MANGED_MALLOC(d_name, type, size)                                 \

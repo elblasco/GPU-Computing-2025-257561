@@ -14,6 +14,8 @@
 \usepackage{listings}
 \usepackage{bm}
 \usepackage{hyperref}
+\usepackage{cleveref}
+\usepackage{svg}
 
 \usepackage{pgfplots}
 \pgfplotsset{compat=newest}
@@ -55,131 +57,102 @@ From the CPU point of view, the main issue is to maximise the cache hits through
 On the GPU side the problem of maximising cache hits remains, and on top of that, race conditions are added. Since in COO format the length of a row is not specified, multiple threads could be reading different portions of the same row and therefore, writing on the same output memory area.
 
 \section{Problem Statement}
-The SpMV operation is formally defined in Equation~\ref{eq:1}, where \(\bm{A}\) is a \(n\times m\) sparse matrix, \(\bm{x}\) a \(m\times 1\) dense vector and \(\bm{y}\) another \(n\times 1\) dense vector.
+The SpMV operation is formally defined in~\Cref{eq:1}, where \(\bm{A}\) is a \(n\times m\) sparse matrix, \(\bm{X}\) a \(m\times 1\) dense vector and \(\bm{Y}\) another \(n\times 1\) dense vector.
 
 \begin{equation}\label{eq:1}
-\bm{y} = \bm{Ax}
+\bm{Y} = \bm{A}\cdot\bm{X}
 \end{equation}
 
 \subsection{Storage Format}
-The coordinate (COO) format is a representation of sparse matrix. COO uses 3 different arrays to store al the necessary information. One array dedicated to store all the non-zero values, while the other 2 contain the corresponding row and column indices. For the sake of simplicity, all the input matrices are assumed to be sorted in row-major order, this is done by transposing all the input matrices which were sorted in column-major order.
+The COOrdinate format (COO) is a representation for sparse matrices. COO uses 3 different arrays to store al the necessary information. One array dedicated to store all the values, while the other 2 contain the corresponding row and column indices. In order to parse the files I used a fork of \href{https://github.com/HicrestLaboratory/distributed_mmio/}{\texttt{distributed\_mmio}}\footnote{The fork author is Matteo Di Noia \url{https://github.com/matteo-dinoia/distributed_mmio} while I just fixed a minor issue \url{https://github.com/elblasco/distributed_mmio}}.
 
 \subsection{Parallelization}
 2 different kernels have been used for the \emph{CUDA} capable GPU, although in both of them the workload is divided equally among all the threads used. The main difference is the pattern used to access the global memory from a thread. In the first approach each thread jumps of stride equivalent to the number of threads used, while in the second approach a thread access to a continuos area of memory long as the total number of non-zero element in the matrix divided by the number of threads used.
 
 \section{State of the Art}
 %Describe the available library solutions for the SpMV problem, including references and citations \cite{asimov1950irobot, svevo1923coscienza, pirandello1926uno}.
-Starting from the implementations presented in this deliverable, performances could be drastically enhanced. Fukaya et al.~\cite{fukaya2021}, despite focussing on the HDC storage format, improved the SpMV CPU based by exploiting diagonalization patterns, SIMD instructions and \emph{OpenMP} directives. On the GPU side Chu et al.~\cite{chu2023} used the CSR format and a more sophisticated load balancing to improve the performances. NVIDIA itself made available a set of libraries to manage and use COO formatted matrices, namely \textit{cuSPARSE}.
+Starting from the implementations presented in this deliverable, performances could be drastically enhanced. Fukaya et al.~\cite{fukaya2021}, despite focussing on the HDC storage format, improved the SpMV CPU based by exploiting diagonalization patterns, SIMD instructions and \emph{OpenMP} directives. On the GPU side Chu et al.~\cite{chu2023} used the CSR format and a more sophisticated load balancing to improve the performances. NVIDIA itself made available a set of libraries to manage and use COO formatted matrices, namely \emph{cuSPARSE}.
+
+In the NVIDIA library \emph{cuSPARSE}, and many others commercial libraries, the problem is redefined according to~\Cref{eq:2}.
+
+\begin{equation}\label{eq:2}
+\bm{Y} = \alpha\emph{op}(\bm{A})\cdot\bm{X}+\beta\bm{Y}
+\end{equation}
+
+With \(\alpha\) and \(\beta\) being two scalars, and \emph{op} being a matrix transformation such as a transposition.
 \section{Methodology and Contributions}\label{sec:methodology}
 
 %Describe the methodology used during the analysis, the compared algorithms and the expected outcomes. Use pseudo-codes like Algorithm \ref{alg:COOaggr} to describe your own implemented kernels.
 
-The tests has been carried out performing multiple execution rounds. The data have been collected throughout the execution since only for the first warm up cycle there were substantially data variations.
-
-\subsection{CPU implementation}
-
-% \noindent Include at least the following implementations:
-% \begin{itemize}
-%     \item Naive CPU implementation
-%     \item Optimised CPU implementation based on cache behaviour
-%     \item GPU naive implementation
-% \end{itemize}
-
-% \noindent For the analysis include
-% \begin{itemize}
-%     \item Valgrind and runtime comparison between the CPU implementations 
-%     \item Runtime CPU vs GPU comparison looping over different matrix dimensions
-% \end{itemize}
-
-The CPU simply loop through all the elements and performs the operations required for the matrix multiplication element-wise. The CPU Algorithm~\ref{alg:cpu} maximise the cache hit since it reads, sequentially, elements that are stored in a contiguous memory area, this holds for \texttt{res[row[i]]} and \texttt{val[i]}.
-
-\begin{algorithm}[h]
-\caption{SpMV algorithm on CPU}
-\algorithmicrequire~The input vectors \(val\), \(row\) and \(col\) of size \(nnz\), array \(arr\) of size \(columns\) and an array \(res\) of size \(rows\).
-\begin{algorithmic}[1]
-\Procedure{Function}{\(row\), \(col\), \(val\), \(arr\), \(res\), \dots}
-  \While{\(i\) in \(\{0\dots nnz\}\)}
-    \State\(res[row[i]] = res[row[i]] + (val[i] \cdot arr[col[i]])\)
-    \State\(i = i + 1\)
-  \EndWhile%
-\EndProcedure%
-\end{algorithmic}
-\label{alg:cpu}
-\end{algorithm}
-
-In particular instance I had to use my personal computer since the cluster version of \emph{valgrind} has some trouble with the cache profile tool. Due to hardware limitation I performed the cache profiling using smaller matrices. To have clearer I did not perform any warm-up cycle sine I want to measure the effectiveness of my algorithm on ``pseudo-empty'' caches.
-
-\begin{table}[h]
-  \centering
-    \begin{tabular}{c|c c}
-      \toprule
-      Matrix & D1 read & D1 write\\
-      \midrule
-      \texttt{lp\_nug05} & 1.5\% & .5\%\\
-      \texttt{rdb250l} & .8\% & .3\%\\
-      \texttt{fpga\_dcop\_15} & .3\% & .2\%\\
-      \bottomrule
-    \end{tabular}
-  \vspace{.5em}
-  
-  \caption{L1 cache misses}
-  \label{tab:L1miss}
-\end{table}
-
-\begin{table}[h]
-  \centering
-    \begin{tabular}{c|c c}
-      \toprule
-      Matrix & LLd read & LLd write\\
-      \midrule
-      \texttt{lp\_nug05} & .7\% & .3\%\\
-      \texttt{rdb250l} & .4\% & .2\%\\
-      \texttt{fpga\_dcop\_15} & .1\% & .1\%\\
-      \bottomrule
-    \end{tabular}
-  \vspace{.5em}
-  
-  \caption{L2 and L3 cache misses}
-  \label{tab:L2L3miss}
-\end{table}
+The tests has been carried out performing multiple execution rounds. The execution has been split into two stages, a warm-up period and a ``valid'' period, the data has been collected only during the ``valid'' period.
 
 \subsection{GPU}
 
-For the GPU implementation I have created two kernel, they differ on the access pattern used for the memory. In Algorithm~\ref{alg:striding} every thread jumps to the next element which has index \emph{current index + \texttt{numThreads}}. In Algorithm~\ref{alg:contiguous} each thread accesses \texttt{portion} elements which are stored in a contiguous area of memory.
+For the GPU implementation I have developed four kernels, they are divided into two main categories. Kernel that leverage shared memory and kernels that leverage warp level primitives. \Cref{alg:warp} was the first kernel developed using warp-level primitives. Every thread proceed with a striding of \(\mathit{numThreads}\) values, initially every thread computes the product between its the matrix value and the value for the corresponding dense array. This values are then combined using a prefix-sum based on warp-level instructions.
 
 \begin{algorithm}[h]
-\caption{SpMV algorithm with striding}
-\algorithmicrequire~The input vectors \(val\), \(row\) and \(col\) of size \(nnz\), array \(arr\) of size \(columns\), an array \(res\) of size \(rows\) and a number \(portion\).
-\begin{algorithmic}[1]
+\caption{SpMV algorithm with WARP level primitives}
+\algorithmicrequire~The input vectors \(val\), \(row\) and \(col\) of size \(nnz\), array \(arr\) of size \(columns\) and an array \(res\) of size \(rows\).
+\begin{algorithmic}[1]\label{alg:warp}
 \Procedure{Function}{\(row\), \(col\), \(val\), \(arr\), \(res\), \dots}
   \State\(start\gets threadId\)
-  \State\(end\gets(portion\cdot numThreads) + start\)
-  \While{\(i\) in \(\{start\dots\min\{end, nnz\}\}\)}
-    \State\(atomicAdd(\&res[row[i]], val[i] \cdot arr[col[i]])\)
-    \State\(i = i + numThreads\)
-  \EndWhile%
+  \State\(pos\gets threadId\&(WARP\_SIZE - 1)\)
+  \State\(total\gets gridDim\cdot blockDim\)
+  \For{\(i\) in \(\{start\dots nnz\}\) with \(i = i + total\)}
+    \State\(row\_id\gets row[i]\)
+    \State\(col\_id\gets col[i]\)
+    \State\(val\_id\gets val[i]\)
+    \State\(//The\ last\ thread\ per\ row\ writes\)
+    \State\(row\_next\gets shfl\_down(\texttt{0xff}\dots, row, 1)\)
+    \If{\ensuremath{\mathit{Edge\_detection()}}}
+      \State\texttt{atomicAdd(\&res[row], prod)};
+    \EndIf%
+  \EndFor%
 \EndProcedure%
 \end{algorithmic}
-\label{alg:striding}
 \end{algorithm}
 
 \begin{algorithm}[h]
-\caption{SpMV algorithm with contiguous chunk}
-\algorithmicrequire~The input vectors \(val\), \(row\) and \(col\) of size \(nnz\), array \(arr\) of size \(columns\), an array \(res\) of size \(rows\) and a number \(portion\).
-\begin{algorithmic}[1]
-\Procedure{Function}{\(row\), \(col\), \(val\), \(arr\), \(res\), \dots}
-  \State\(start\gets portio\cdot threadId\)
-  \State\(end\gets portion + start\)
-  \While{\(i\) in \(\{start\dots\min\{end, nnz\}\}\)}
-    \State\(atomicAdd(\&res[row[i]], val[i] \cdot arr[col[i]])\)
-    \State\(i = i + 1\)
-  \EndWhile%
-\EndProcedure%
+\caption{Prefix-sum with WARP level primitives}
+\algorithmicrequire~The values for \(product\), \(row\) and \(pos\).
+\begin{algorithmic}[1]\label{alg:sum-warp}
+  \Procedure{prefix\_sum\_warp}{\ensuremath{product, row, pos}}
+    \For{\(x\) in \(\{1\dots WARP\_SIZE\}\) with \(x = x\cdot 2\)}
+      \State\(prev\_row\gets shfl\_up(\dots, row, x)\)
+      \State\(prev\_prod\gets shfl\_up(\dots, product, x)\)
+      \If{\(pos\geq delta\land prev\_row = row\)}
+        \State\(product = product + rev\_prod\)
+      \EndIf%
+    \EndFor%
+  \EndProcedure%
 \end{algorithmic}
-\label{alg:contiguous}
 \end{algorithm}
 
-From the theory Algorithm~\ref{alg:striding} should have been faster. This follows from the fact that every thread within the same SM (Streaming Multiprocessor) accesses elements that are spacially adjacent in the memory. Contrary, Algorithm~\ref{alg:contiguous} has an higher rate of cache miss since, threads in the same SM may need to access elements far away from each other. Since the cache optimisation is so important for these algorithm and they had to do so few floating point operations I expected for them to be memory bounded.
+\begin{figure}[h]
+  \centering
+  \includesvg[width=\columnwidth, height=30ex]{warp-level.svg}
+\caption{Execution of prefix sum}\label{fig:warp-sum}
+\end{figure}
+
+\Cref{alg:sum-warp} is just a prefix sum that exploits warp instructions and take into account the possibility that within the same warp we could be summing different rows. In~\Cref{fig:warp-sum} it is described a possible execution for the prefix sum procedure, in red the value returned summed in global memory in line 12 of~\Cref{alg:warp}. The next improvement introduced was the loop unroll of the main loop in~\Cref{alg:sum-warp}, using compiler directives. To be precise, I used \texttt{\#pragma unroll}, since the loop always iterates in an interval known at compile time, as a matter of fact in my code \texttt{WARP\_SIZE} is a macro that define the value 32.
+
+I also tried to improve the baseline proposed in deliverable 1 by using dynamically allocated shared memory.
+% \begin{algorithm}[h]
+% \caption{SpMV algorithm with contiguous chunk}
+% \algorithmicrequire~The input vectors \(val\), \(row\) and \(col\) of size \(nnz\), array \(arr\) of size \(columns\), an array \(res\) of size \(rows\) and a number \(portion\).
+% \begin{algorithmic}[1]\label{alg:contiguous}
+% \Procedure{Function}{\(row\), \(col\), \(val\), \(arr\), \(res\), \dots}
+%   \State\(start\gets portio\cdot threadId\)
+%   \State\(end\gets portion + start\)
+%   \While{\(i\) in \(\{start\dots\min\{end, nnz\}\}\)}
+%     \State\(atomicAdd(\&res[row[i]], val[i] \cdot arr[col[i]])\)
+%     \State\(i = i + 1\)
+%   \EndWhile%
+% \EndProcedure%
+% \end{algorithmic}
+% \end{algorithm}
+
+% From the theory Algorithm~\ref{alg:striding} should have been faster. This follows from the fact that every thread within the same SM (Streaming Multiprocessor) accesses elements that are spacially adjacent in the memory. Contrary, Algorithm~\ref{alg:contiguous} has an higher rate of cache miss since, threads in the same SM may need to access elements far away from each other. Since the cache optimisation is so important for these algorithm and they had to do so few floating point operations I expected for them to be memory bounded.
 
 \section{System Description and Experimental Set-up}
 
@@ -189,22 +162,24 @@ From the theory Algorithm~\ref{alg:striding} should have been faster. This follo
 
 %Describe the used system and the software environment (CUDA version, GCC version, \dots). Decide which information are valuable to group into a table like Table \ref{tab:system_description} and which are more valuable to be described in the text.
 
-Table~\ref{tab:systems_softwares} shows the various software used in the deliverable, excluded the building tools. It is worth mentioning again that, for \emph{valgrind}, I had to do a rollback on my pc since the last version (same of the cluster) has some problem with the tool \emph{cachegrind}. 
+For this deliverable I could not use my own machine since it does not have a \emph{CUDA} capable GPU, so I only used the remote cluster. \Cref{tab:system-softwares} describes all the software used to set-up the environment and run the kernels. 
 
 \begin{table}[ht]
     \centering
-    \begin{tabular}{lllr}
-    \toprule
-    \textbf{System} &  \textbf{GCC} & \textbf{Valgrind} & \textbf{CUDA}\\
-    \midrule
-    Cluster &  11.5.0 & 3.23.0 & 12.5.0\\
-    PC &  15.1.1 & 3.20.0 & 12.8.1\\
-    \bottomrule
+    \begin{tabular}{llll}
+      \toprule
+      \textbf{Software} & \textbf{Version} & \textbf{Git Branch} & \textbf{Git Hash}\\
+      \midrule
+      GCC & 11.5.0 & & \\
+      CUDA & 12.5.0 & & \\
+      SbatchMan & & example & 40d869a\\
+      distributed\_mmio & & main & 3563a2f\\
+      \bottomrule
     \end{tabular}
     \vspace{.5em}
     
     \caption{Systems softwares}
-    \label{tab:systems_softwares}
+    \label{tab:system-softwares}
 \end{table}
 
 \begin{table}[ht]
@@ -214,8 +189,7 @@ Table~\ref{tab:systems_softwares} shows the various software used in the deliver
     \toprule
     \textbf{System} &  \textbf{Processor} & \textbf{Cores per Socket} & \textbf{RAM} & \textbf{Accelerator} \\
     \midrule
-    Cluster &  Intel(R) Xeon(R) Silver 4214 & 48 at 2.2 GHz & 400 GB & NVidia A30\\
-    PC &  AMD Ryzen 5 3500U & 8 at 2.1 GHz & 8 GB & Radeon Vega Mobile Gfx \\
+    Cluster &  Intel(R) Xeon(R) Silver 4214 & 48 at 2.2 GHz & 400 GB & NVidia L40s\\
     \bottomrule
     \end{tabular}
     \end{adjustbox}
@@ -229,13 +203,15 @@ Table~\ref{tab:systems_softwares} shows the various software used in the deliver
 
 %Discribe the used dataset and the reasons of your choice. List the used input matrices and all the information that you think are valuable to show (number of non-zero elements, sparsity ratio, \dots); Table \ref{tab:my_label} gives you a possible example.
 
-To add a bit more of generality to the dataset I picked four matrix from four different kinds from the site \url{https://sparse.tamu.edu/}. Since all the matrices are squared only the number is written on Table~\ref{tab:dataset}.
+To add a bit more of generality to the dataset I picked six matrix from six different kinds from the site \url{https://sparse.tamu.edu/}. Since all the matrices are squared only the number is written on~\Cref{tab:dataset}.
 
 \begin{enumerate}
-\item Model Reduction Problem;
 \item Electromagnetics Problem;
 \item Undirected Weighted Graph;
-\item Optimization Problem.
+\item Optimization Problem;
+\item Structural Problem;
+\item 2D/3D Problem;
+\item Semiconductor Process Problem.
 \end{enumerate}
 
 \begin{table}[h]
@@ -244,10 +220,12 @@ To add a bit more of generality to the dataset I picked four matrix from four di
     \toprule
     \textbf{Name} & \textbf{Rows} & \textbf{Pattern Entries} & \textbf{Symmetric} & \textbf{Kind}\\
     \midrule
-    \texttt{bone010} & 986,703 & 71,666,325 & Yes & 1\\
-      \texttt{dielFilterV3real} & 1,102,824 & 89,306,020 & Yes & 2\\
-      \texttt{mawi\_201512020330} & 226,196,185 & 480,047,894 & Yes & 3\\
-      \texttt{nlpkkt160} &8,345,600 & 229,518,112 & Yes & 4\\
+      \texttt{dielFilterV3real} & 1,102,824 & 89,306,020 & Yes & 1\\
+      \texttt{Flan\_1565} & 1,564,794 & 117,406,044 & Yes & 4\\
+      \texttt{mawi\_201512020330} & 226,196,185 & 480,047,894 & Yes & 2\\
+      \texttt{nlpkkt160} & 8,345,600 & 229,518,112 & Yes & 3\\
+      \texttt{Queen\_4147} & 4,147,110 & 329,499,284 & Yes & 5\\
+      \texttt{vas\_stokes\_2M} & 2,146,677 & 65,129,037 & No & 6\\
       \bottomrule
     \end{tabular}
     \vspace{.5em}
@@ -257,7 +235,7 @@ To add a bit more of generality to the dataset I picked four matrix from four di
 
 \subsection{Experimental Set-up}
 %Explain the benchmark metrics and all the experimental set-up (warm-up cycles, number of performed runs\dots).
-I used 5 warm-up runs followed by 5 runs to collect data. I kept this set-up even though after few tests one warm-up round was enough to have stable values, as a matter of fact I decided to keep all the data generated. Each job submitted to the cluster executed a full warm-up and run for Algorithm~\ref{alg:cpu}, then Algorithm~\ref{alg:striding} and then Algorithm~\ref{alg:contiguous}. 
+I used 5 warm-up runs followed by 5 ``valid'' runs to collect data. I kept this set-up even though after few tests one warm-up round was enough to have stable values, as a matter of fact I decided to keep all the data generated. Each job submitted to the cluster executed a full warm-up and run for Algorithm~\ref{alg:cpu}, then Algorithm~\ref{alg:striding} and then Algorithm~\ref{alg:contiguous}. 
 
 \section{Experimental Results}\label{sec:result}
 % Present and discuss results. Include plots and tables when required (like Figure \ref{fig:enter-label}). Do not simply describe the figures; criticise the achieved results by underlining how they confirm/differ from the expected outcomes described in Section \ref{sec:methodology}.
