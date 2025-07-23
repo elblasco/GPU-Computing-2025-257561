@@ -233,6 +233,13 @@ For this deliverable I could not use my own machine since it does not have a \em
     \label{tab:system-detals}
 \end{table}
 
+Regarding the flags used:
+
+\begin{itemize}
+\item\texttt{GCC}: \texttt{-O3 -g}
+\item\texttt{CUDA}: \texttt{--gpu-architecture=sm\_80 -m64 -O3 -g --compiler-options "-Wall -Wextra" -Iinclude -lcusparse -lineinf}
+\end{itemize}
+
 \subsection{Dataset description}
 
 %Discribe the used dataset and the reasons of your choice. List the used input matrices and all the information that you think are valuable to show (number of non-zero elements, sparsity ratio, \dots); Table \ref{tab:my_label} gives you a possible example.

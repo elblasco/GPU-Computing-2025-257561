@@ -13,7 +13,6 @@ DIST_MMIO_FLAGS=-O3 -g
 # CUDA OPT
 CUDAC=nvcc
 CUDAC_FLAGS=--gpu-architecture=sm_80 -m64 -O3 -g --compiler-options "-Wall -Wextra" -Iinclude -lcusparse -lineinfo
-PROF_FLAGS=-lineinfo
 MAIN_SRC=$(SRC_DIR)/main.cu
 
 # MISC
