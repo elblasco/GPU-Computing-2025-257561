@@ -34,12 +34,12 @@ cd "$MTX_PATH" || exit
 
 # List of URLs to download
 urls=(
-  "https://suitesparse-collection-website.herokuapp.com/MM/Dziekonski/dielFilterV3real.tar.gz"
-  "https://suitesparse-collection-website.herokuapp.com/MM/Janna/Flan_1565.tar.gz"
-  "https://suitesparse-collection-website.herokuapp.com/MM/MAWI/mawi_201512020330.tar.gz"
-  "https://suitesparse-collection-website.herokuapp.com/MM/Schenk/nlpkkt160.tar.gz"
-  "https://suitesparse-collection-website.herokuapp.com/MM/Janna/Queen_4147.tar.gz"
-  "https://suitesparse-collection-website.herokuapp.com/MM/VLSI/vas_stokes_2M.tar.gz"
+	"https://suitesparse-collection-website.herokuapp.com/MM/Dziekonski/dielFilterV3real.tar.gz"
+	"https://suitesparse-collection-website.herokuapp.com/MM/Janna/Flan_1565.tar.gz"
+	"https://suitesparse-collection-website.herokuapp.com/MM/MAWI/mawi_201512020330.tar.gz"
+	"https://suitesparse-collection-website.herokuapp.com/MM/Schenk/nlpkkt160.tar.gz"
+	"https://suitesparse-collection-website.herokuapp.com/MM/Janna/Queen_4147.tar.gz"
+	"https://suitesparse-collection-website.herokuapp.com/MM/VLSI/vas_stokes_2M.tar.gz"
 )
 
 # Download and extract each file
