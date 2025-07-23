@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <cuda_runtime.h>
 #include <cusparse.h>
 #include <math.h>
@@ -12,23 +13,26 @@
 
 #define NUM_TYPE float
 #define IDX_TYPE size_t
-#define MAX_BLOCK_SIZE 128
+
+#define MAX_BLOCK_SIZE 512
 #define MAX_GRID_SIZE 256
 #define NUM_TEST 5
 #define WARM_UP_RUN 5
 #define WARP_SIZE 32
 #define BANKS_NUM 32
 #define FULL_WARP_MASK 0xffffffff
+#define ELEM_PER_THREAD 2
+#define LOG_WARP 5
+#define BANKS_NUM_LOG 5
+
 #define OPS_PER_NUN_BASELINE 2
 #define MEMEORY_RW_BASELINE 5
 #define OPS_PER_NUN_WARP_SHFL 6
 #define MEMEORY_RW_WARP_SHFL 5
 #define OPS_PER_NUN_WARP_SHFL_UNROLL 6
 #define MEMEORY_RW_WARP_SHFL_UNROLL 5
-#define ELEM_PER_THREAD 2
-#define LOG_WARP 5
-#define BANKS_NUM_LOG 5
-#define CONFLICT_FREE_OFFSET(n)((n) >> BANKS_NUM + (n) >> (2 * BANKS_NUM_LOG))
+#define OPS_PER_NUN_SHARED_MEMORY 3
+#define MEMEORY_RW_SHARED_MEMORY 6
 
 #define CEILING(X, Y) (((X) + (Y) - 1) / (Y))
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
@@ -39,10 +43,9 @@
   {                                                                            \
     cudaError_t status = (func);                                               \
     if (status != cudaSuccess) {                                               \
-      fprintf(stderr, RED "CUDA error: %s\n" RESET,                            \
-              cudaGetErrorString(status));                                     \
-      fflush(stderr);                                                          \
-      exit(-1);                                                                \
+      printf("CUDA API failed at line %d with error: %s (%d)\n", __LINE__,     \
+             cudaGetErrorString(status), status);                              \
+      exit(EXIT_FAILURE);                                                      \
     }                                                                          \
   }
 
@@ -50,15 +53,13 @@
   {                                                                            \
     cusparseStatus_t status = (func);                                          \
     if (status != CUSPARSE_STATUS_SUCCESS) {                                   \
-      fprintf(stderr, RED "cuSPARSE error at %d: %d\n" RESET, __LINE__,        \
-              status);                                                         \
-      fflush(stderr);                                                          \
-      exit(-1);                                                                \
+      printf("CUSPARSE API failed at line %d with error: %s (%d)\n", __LINE__, \
+             cusparseGetErrorString(status), status);                          \
+      exit(EXIT_FAILURE);                                                      \
     }                                                                          \
   }
 
 #define CUDA_MANGED_MALLOC(d_name, type, size)                                 \
-  type *d_name;                                                                \
   CHECK_CUDA(cudaMallocManaged(&d_name, size * sizeof(type)));
 
 #define CUDA_FREE(d_name) CHECK_CUDA(cudaFree(d_name));
@@ -100,9 +101,7 @@ enum kernel_type {
   BASELINE,
   WARP_SHFL,
   WARP_SHFL_UNROLL,
-  SHARED_MEMORY_SUM,
-  SHARED_MEMORY_BANK,
-  CUSPARSE
+  SHARED_MEMORY_SUM
 };
 
 double geometric_mean(const float *arr, size_t n) {
@@ -131,6 +130,11 @@ double flops_counter(kernel_type kernel, size_t nnz, float ms) {
   case WARP_SHFL_UNROLL:
     flops = nnz * (2 + LOG_WARP);
     break;
+  case SHARED_MEMORY_SUM:
+    flops = nnz * (1 + log2f(MAX_BLOCK_SIZE) + 1);
+    break;
+  default:
+    break;
   }
   return (flops / (ms / 1.e3)) / 1.e9;
 }
@@ -148,14 +152,14 @@ float bandwidth_counter(const kernel_type kernel, const size_t nnz,
   case WARP_SHFL_UNROLL:
     total_memory_rw = nnz * MEMEORY_RW_WARP_SHFL_UNROLL;
     break;
+  case SHARED_MEMORY_SUM:
+    total_memory_rw = nnz * (3 + log2f(MAX_BLOCK_SIZE) + 1);
+    break;
+  default:
+    break;
   }
   return (sizeof(NUM_TYPE) * total_memory_rw / milliseconds) / 1e12;
 }
-
-// float bandwidth_counter(const kernel_type kernel, const size_t nnz,
-//                         const float milliseconds) {
-//   return (nnz * sizeof(NUM_TYPE) * memory_r_w(kernel) / milliseconds) / 1e12;
-// }
 
 void compute_results(const float *times, const float *flops,
                      const float *bandwidth) {
@@ -183,18 +187,10 @@ void compute_results(const float *times, const float *flops,
 
 void populate_d_arrays(const COO_local<IDX_TYPE, NUM_TYPE> *sparse_matrix,
                        NUM_TYPE *d_vals, IDX_TYPE *d_rows, IDX_TYPE *d_cols) {
-  if (sparse_matrix->val != nullptr) {
-    cudaMemset(d_vals, 1, sparse_matrix->nnz * sizeof(NUM_TYPE));
-    for (size_t i = 0; i < sparse_matrix->nnz; ++i) {
-      d_rows[i] = sparse_matrix->row[i];
-      d_cols[i] = sparse_matrix->col[i];
-    }
-  } else {
-    for (size_t i = 0; i < sparse_matrix->nnz; ++i) {
-      d_vals[i] = sparse_matrix->val[i];
-      d_rows[i] = sparse_matrix->row[i];
-      d_cols[i] = sparse_matrix->col[i];
-    }
+  for (size_t i = 0; i < sparse_matrix->nnz; ++i) {
+    d_vals[i] = (sparse_matrix->val != nullptr) ? sparse_matrix->val[i] : 1.0;
+    d_rows[i] = sparse_matrix->row[i];
+    d_cols[i] = sparse_matrix->col[i];
   }
 }
 

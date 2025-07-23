@@ -27,9 +27,5 @@ int main(int argc, char **argv) {
   printf(GREEN "Now running the shared memory " RESET "\n");
   test_spmv(coo_matrix, kernel_type::SHARED_MEMORY_SUM);
 
-  // printf(GREEN "Now running the cusprse default algorithm " RESET "\n");
-  // fflush(stdout);
-  // test_spmv(coo_matrix, kernel_type::CUSPARSE);
-
   return 0;
 }
