@@ -110,7 +110,7 @@ __global__ void spmv_coo_shfl_unroll(const IDX_TYPE *__restrict__ d_rows,
 __global__ void shared_prefix_sum(
     const IDX_TYPE __restrict__ *d_row, const IDX_TYPE __restrict__ *d_col,
     const NUM_TYPE *d_val, const NUM_TYPE *d_dense_vec, NUM_TYPE *d_res,
-    const IDX_TYPE nnz, const size_t cell_per_block, const size_t tot_threads) {
+    const IDX_TYPE nnz, const size_t tot_threads) {
 
   extern __shared__ float shared_sum[];
   // allocated on invocation
@@ -136,7 +136,7 @@ __global__ void shared_prefix_sum(
         const size_t bi =
             offset + local_thread_id; // offset * (2 * local_thread_id + 2) - 1;
 
-        const IDX_TYPE other_row = d_row[blockIdx.x * cell_per_block + bi];
+        const IDX_TYPE other_row = d_row[global_index + bi];
 
         shared_sum[bi] +=
             (curr_row == other_row) ? shared_sum[local_thread_id] : 0;

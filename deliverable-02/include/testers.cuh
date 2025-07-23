@@ -95,8 +95,7 @@ void test_spmv(const COO_local<IDX_TYPE, NUM_TYPE> *sparse_matrix,
       nvtxRangePushA("Shared memory  kernel");
       shared_prefix_sum<<<grid_size, block_size,
                           block_size * sizeof(NUM_TYPE)>>>(
-          d_rows, d_cols, d_vals, d_dense_array, d_res_array, nnz, portion,
-          n_threads);
+          d_rows, d_cols, d_vals, d_dense_array, d_res_array, nnz, n_threads);
       cudaDeviceSynchronize();
       nvtxRangePop();
       CUDA_TIMER_STOP(gpu_time);
