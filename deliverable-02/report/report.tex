@@ -40,7 +40,7 @@
 %[max 200 words]\\
 The sparse matrix-dense vector multiplication (SpMV) is an algebraic operation in which a sparse matrix is multiplied by a dense vector. SpMV is widely used in real-world applications such as scientific and engineering computing, data mining, and graph analysis.
 
-This deliverable discusses the implementation and the performance analysis of a series of SpMV algorithms for COO matrices. These algorithms are implemented for a single-core CPU and a \emph{CUDA} capable GPU. Regarding the GPU implementations, no threads/warp level synchronisation has been used, only atomic operations to keep the resulting vector consistent.
+This deliverable discusses the implementation and the performance analysis of a series of SpMV algorithms for sparese matrices encoded using the COOrdinate (COO) format. These algorithms are implemented for \emph{CUDA} capable GPU. Regarding the GPU implementations, the main techniques used leverage on warp instructions or shared memory optimisations.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -50,7 +50,7 @@ Sparse Matrix, SpMV, \emph{CUDA}, Parallelization, Storage Format
 \section{Introduction}
 SpMV is considered a fundamental algebraic operation in many scientific fields such as computational fluid dynamics, optimisation and graph algorithms.
 
-The main challenges in implementing an efficient SpMV algorithm differ in CPU and GPU, and are strictly bound to the type of matrix representation used (COO, CSR, ELL,\dots). For the purpose of this deliverable only COO representation is taken into account.
+The main challenges in implementing an efficient SpMV algorithm differ in CPU and GPU, and are strictly bound to the type of matrix representation used COO, Compressed Sparse Row (CSR), ELLpack-Itpack (ELL),\dots. For the purpose of this deliverable only COO representation is taken into account.
 
 From the CPU point of view, the main issue is to maximise the cache hits throughout the execution, data consistency is not a problem since only single core CPUs were used.
 
@@ -64,23 +64,23 @@ The SpMV operation is formally defined in~\Cref{eq:1}, where \(\bm{A}\) is a \(n
 \end{equation}
 
 \subsection{Storage Format}
-The COOrdinate format (COO) is a representation for sparse matrices. COO uses 3 different arrays to store al the necessary information. One array is dedicated to store all the values, while the other 2 contain the corresponding row and column indices, ideally the arrays are sorted first by row index and then by columns index. An example of a COO encoding is shown in~\Cref{fig:coo-format}.
+The COO format is a representation for sparse matrices. COO uses 3 different arrays to store al the necessary information. One array is dedicated to store all the values, while the other 2 contain the corresponding row and column indices, ideally the arrays are sorted first by row index and then by columns index. An example of a COO encoding is shown in~\Cref{fig:coo-format}.
 
 \begin{figure}[ht]
   \centering
   % \includesvg[width=\columnwidth, height=30ex]{COO-format.svg}
-  \includesvg[width=\columnwidth]{COO-format.svg}
-\caption{encoding of a matrix on COO format}\label{fig:coo-format}
+  \includegraphics[width=\columnwidth]{COO-format.png}
+\caption{Encoding of a matrix in COO format}\label{fig:coo-format}
 \end{figure} 
 
 \subsection{Parallelization}\label{sec:parallelization}
-Three different kernels have been used for the \emph{CUDA} capable GPU. Although they differ by the kind of memory and optimisations used, all of them leverage on the fact that the COO arrays are sorted first by row  and then by column. In general the multiplication problem has been reduced to a prefix sum computation. In to optimise the computation of prefix I tried to minimise global memory writes by using warp level primitives and the shared memory.
+Three different kernels have been used for the \emph{CUDA} capable GPU. Although they differ by the kind of memory and optimisations used, all of them leverage on the fact that the COO arrays are sorted first by row  and then by column. In general the multiplication problem has been reduced to a prefix sum computation. To optimise the prefix sum computations I tried to minimise writes on global memory by using warp level primitives and the shared memory.
 
 \section{State of the Art}
 %Describe the available library solutions for the SpMV problem, including references and citations \cite{asimov1950irobot, svevo1923coscienza, pirandello1926uno}.
 Starting from the implementations presented in this deliverable, performances could be drastically enhanced. Fukaya et al.~\cite{fukaya2021}, despite focussing on the HDC storage format, improved the SpMV CPU based by exploiting diagonalization patterns, SIMD instructions and \emph{OpenMP} directives. On the GPU side Chu et al.~\cite{chu2023} used the CSR format and a more sophisticated load balancing to improve the performances. NVIDIA itself made available a set of libraries to manage and use COO formatted matrices, namely \emph{cuSPARSE}.
 
-In the NVIDIA library \emph{cuSPARSE}, and many others commercial libraries, the problem is redefined according to~\Cref{eq:2}.
+In the NVIDIA library \emph{cuSPARSE}, and many others commercial libraries, the problem is redefined according to a more complex equation state in~\Cref{eq:2}.
 
 \begin{equation}\label{eq:2}
 \bm{Y} = \alpha\emph{op}(\bm{A})\cdot\bm{X}+\beta\bm{Y}
@@ -94,7 +94,9 @@ The test were carried out on a remote cluster. I compared all the kernels agains
 
 All the algorithms assumed that the resulting array is empty, so I explicitly initialised every element of it to the value 0.
 
-\subsection{Algorithms}
+Hereafter I will refer to the best kernel presented in the previous deliverable as ``baseline''.
+
+\subsection{Algorithms}\label{sec:algorithms}
 
 For the GPU implementation I have developed three kernels, they are divided into two main categories. Kernel that leverage on shared memory and kernels that leverage on warp level primitives. \Cref{alg:warp} was the first kernel developed using warp-level primitives. Every thread proceed with a striding of \(\mathit{numThreads}\) values, initially every thread computes the product between its the matrix value and the value for the corresponding dense array. This values are then combined using a prefix-sum based on warp-level instructions.
 
@@ -110,9 +112,9 @@ For the GPU implementation I have developed three kernels, they are divided into
     \State\(row\_id\gets row[i]\)
     \State\(col\_id\gets col[i]\)
     \State\(val\_id\gets val[i]\)
-    \State\(//The\ last\ thread\ per\ row\ writes\)
+    \State\(PREFIX\_SUM\_WARP(\dots)\)
     \State\(row\_next\gets shfl\_down(\texttt{0xff}\dots, row, 1)\)
-    \If{\ensuremath{\mathit{Edge\_detection()}}}
+    \If{edge detected}
       \State\texttt{atomicAdd(\&res[row], prod)};
     \EndIf%
   \EndFor%
@@ -142,10 +144,43 @@ For the GPU implementation I have developed three kernels, they are divided into
 \caption{Execution of prefix sum with warp size 8}\label{fig:warp-sum}
 \end{figure}
 
-As mention in~\Cref{sec:parallelization} I reduced the problem to a prefix sum, as a matter of fact~\Cref{alg:sum-warp} exploits warp-level primitives to compute a prefix sum. \Cref{alg:sum-warp} is more refined w.r.t. simple prefix sum, since it has to take into account the possibility that within the same warp we could be summing different rows. In~\Cref{fig:warp-sum} it is described a possible execution for the prefix sum procedure, in red the value returned summed in global memory in line 12 of~\Cref{alg:warp}. The next improvement introduced was the loop unroll of the main loop in~\Cref{alg:sum-warp}, using compiler directives. To be precise, I used \texttt{\#pragma unroll}, since the loop always iterates in an interval known at compile time, in fact \texttt{WARP\_SIZE} is a macro defined as the value 32.
+As mention in~\Cref{sec:parallelization} I reduced the problem to a prefix sum, as a matter of fact~\Cref{alg:sum-warp} exploits warp-level primitives to compute a prefix sum. \Cref{alg:sum-warp} is more refined w.r.t. simple prefix sum, since it has to take into account the possibility that within the same warp we could be summing different rows. In~\Cref{fig:warp-sum} it is described a possible execution for the prefix sum procedure, in red the values that are going to pass the edge detection check and are going to be written in global memory. The next improvement introduced was the loop unroll of the main loop in~\Cref{alg:sum-warp}, using compiler directives. To be precise, I used \texttt{\#pragma unroll}, since the loop always iterates in an interval known at compile time, in fact \texttt{WARP\_SIZE} is a macro defined as the value 32.
 
-I also tried to improve the baseline proposed in deliverable 1 by using dynamically allocated shared memory.
+I also tried to improve the baseline proposed in deliverable 1 by using dynamically allocated shared memory. I used a similar technique to the one described in~\Cref{alg:warp}. Initially the values are copied into the shared memory then an algorithm similar to~\Cref{alg:sum-warp} and pictured in~\Cref{fig:warp-sum}.
 
+\begin{algorithm}[ht]
+\caption{Prefix-sum with WARP level primitives}
+\algorithmicrequire~The input vectors \(val\), \(row\) and \(col\) of size \(nnz\), array \(arr\) of size \(columns\) and an array \(res\) of size \(rows\).
+\begin{algorithmic}[1]\label{alg:share}
+\Procedure{Function}{\(row\), \(col\), \(val\), \(arr\), \(res\), \dots}
+  \State\(start\gets threadId\)
+  \State\(pos\gets threadId\&(WARP\_SIZE - 1)\)
+  \State\(total\gets gridDim\cdot blockDim\)
+   \State\(shared\gets \_\_shared\_\_\)
+  \For{\(i\) in \(\{start\dots nnz\}\) with \(i = i + total\)}
+    \State\(row\_id\gets row[i]\)
+    \State\(col\_id\gets col[i]\)
+    \State\(val\_id\gets val[i]\)
+    \State\(val\_id\gets 1\)
+    \State\(shared[start]\gets val\_id * arr[col\_id]\)
+    \For{\(d\) in \(\{blockDim.x - 1\dots 0\}\) with \(d = d / 2\)}
+      \State\_\_syncthreads
+      \State\(bi\gets offset + start\)
+      \State\(other\_row\gets row[i+bi]\)
+      \If{\(start < d\land row\_id = other\_row\)}
+        \State\(shared[bi]\gets shared[bi] + shared[start]\)
+      \EndIf%
+      \State\(offset = offset\cdot 2\)
+    \EndFor%
+    \State\_\_syncthreads
+    \State\(row\_next\gets shfl\_down(\texttt{0xff}\dots, row, 1)\)
+    \If{edge detected}
+      \State\texttt{atomicAdd(\&res[row\_id], shared[start])};
+    \EndIf%
+  \EndFor%
+\EndProcedure%
+\end{algorithmic}
+\end{algorithm}
 
 % From the theory Algorithm~\ref{alg:striding} should have been faster. This follows from the fact that every thread within the same SM (Streaming Multiprocessor) accesses elements that are spacially adjacent in the memory. Contrary, Algorithm~\ref{alg:contiguous} has an higher rate of cache miss since, threads in the same SM may need to access elements far away from each other. Since the cache optimisation is so important for these algorithm and they had to do so few floating point operations I expected for them to be memory bounded.
 
@@ -153,9 +188,11 @@ I also tried to improve the baseline proposed in deliverable 1 by using dynamica
 
 %Use this section to describe system, dataset and experimental set-up.
 
-\subsection{System Description}
+\subsection{System Description}\label{sec:system-description}
 
 %Describe the used system and the software environment (CUDA version, GCC version, \dots). Decide which information are valuable to group into a table like Table \ref{tab:system_description} and which are more valuable to be described in the text.
+
+In this section, I will also report the version of piece of software that I did not use. I was not able to use \emph{ncu} since the node in which I was working crashed every time I was trying to use it.
 
 For this deliverable I could not use my own machine since it does not have a \emph{CUDA} capable GPU, so I only used the remote cluster. \Cref{tab:system-softwares} describes all the software used, while~\Cref{tab:system-detals} describe the hardware that I used.
 
@@ -167,6 +204,8 @@ For this deliverable I could not use my own machine since it does not have a \em
       \midrule
       \texttt{GCC} & 11.5.0 & & \\
       \texttt{CUDA} & 12.5.0 & & \\
+      \texttt{nsys} & 2024.2.3.38 & & \\
+      \texttt{ncu} & 2024.2.0.0 & & \\
       \texttt{SbatchMan} & & example & 40d869a\\
       \texttt{distributed\_mmio} & & main & 3563a2f\\
       \bottomrule
@@ -182,9 +221,9 @@ For this deliverable I could not use my own machine since it does not have a \em
     \begin{adjustbox}{width=\columnwidth}
     \begin{tabular}{llrl}
     \toprule
-    \textbf{Processor} & \textbf{Cores per Socket} & \textbf{RAM} & \textbf{Accelerator} \\
+    \textbf{Processor} & \textbf{Cores per Socket} & \textbf{RAM} & \textbf{GPU} \\
     \midrule
-    Intel(R) Xeon(R) Silver 4214 & 48 at 2.2 GHz & 400 GB & NVidia L40s\\
+    AMD EPYC 9334 & 32 at 2 GHz & 771 GiB & NVidia L40s\\
     \bottomrule
     \end{tabular}
     \end{adjustbox}
@@ -198,82 +237,150 @@ For this deliverable I could not use my own machine since it does not have a \em
 
 %Discribe the used dataset and the reasons of your choice. List the used input matrices and all the information that you think are valuable to show (number of non-zero elements, sparsity ratio, \dots); Table \ref{tab:my_label} gives you a possible example.
 
-To add a bit more of generality to the dataset I picked six matrix from six different kinds from the site \url{https://sparse.tamu.edu/}. Since all the matrices are squared only the number is written on~\Cref{tab:dataset}.
+To add a bit more of generality to the dataset I picked six matrix from six different domains, from the site \url{https://sparse.tamu.edu/}. Since all the matrices are squared, I decided to describe their sizes by writing only rows. I had to avoid rectangular matrices since they were a minority w.r.t to the number of square matrices present on the site. I tried to balance different domain of application with different sparsity ratio.
 
+This is the list of all domains of applications which I picked from:
 \begin{enumerate}
-\item Electromagnetics Problem;
-\item Undirected Weighted Graph;
-\item Optimization Problem;
-\item Structural Problem;
-\item 2D/3D Problem;
-\item Semiconductor Process Problem.
+\item Electromagnetics Problem; %check
+\item Undirected Weighted Graph;%check
+\item Structural Problem; %check
+\item 2D/3D Problem; %check
+\item Optimisation Problem;
+\item Undirected Graph. %check
 \end{enumerate}
+
+\Cref{tab:dataset} summarises all the matrices used.
 
 \begin{table}[ht]
     \centering
     \begin{tabular}{lrrr}
     \toprule
-    \textbf{Name} & \textbf{Rows} & \textbf{Pattern Entries} & \textbf{Sparsity Rate}\\
+    \textbf{Name} & \textbf{Rows} & \textbf{Pattern Entries} & \textbf{Sparsity}\\
     \midrule
       \texttt{dielFilterV3real} & 1,102,824 & 89,306,020 & \(7\mathrm{e}{-5}\)\\
       \texttt{Flan\_1565} & 1,564,794  & 117,406,044 & \(5\mathrm{e}{-5}\)\\
-      \texttt{Flan\_1565} & 1,564,794  & 117,406,044 & \(5\mathrm{e}{-5}\)\\
       \texttt{mawi\_201512020330} & 226,196,185 & 480,047,894 & \(9\mathrm{e}{-9}\)\\
+      \texttt{mycielskian19} & 393,215 & 903,194,710 & \(6\mathrm{e}{-3}\)\\ 
       \texttt{nlpkkt160} & 8,345,600 & 229,518,112 & \(3\mathrm{e}{-6}\)\\
-      \texttt{vas\_stokes\_2M} & 2,146,677 & 65,129,037 & \(1\mathrm{e}{-5}\)\\
+      \texttt{Queen\_4147} & 4,147,110 & 329,499,284 & \(2\mathrm{e}{-5}\)\\                                          
       \bottomrule
     \end{tabular}
     \vspace{.5em}
     \caption{Input Matrices}
     \label{tab:dataset}
-\end{table}
+  \end{table}
+
+\begin{figure}[ht]
+\begin{minipage}[c]{0.4\columnwidth}
+\includegraphics[width=\linewidth]{dielFilterV3real.png}
+\caption{\texttt{dielFilterV3real}}
+\end{minipage}
+\hfill
+\begin{minipage}[c]{0.4\columnwidth}
+\includegraphics[width=\linewidth]{Flan_1565.png}
+\caption{\texttt{Flan\_1565}}
+\end{minipage}%
+\end{figure}
+
+\begin{figure}[ht]
+\begin{minipage}[c]{0.4\columnwidth}
+\includegraphics[width=\linewidth]{mawi_201512020330.png}
+\caption{\texttt{mawi\_201512020330}}
+\end{minipage}
+\hfill
+\begin{minipage}[c]{0.4\columnwidth}
+\includegraphics[width=\linewidth]{mycielskian19.png}
+\caption{\texttt{mycielskian19}}
+\end{minipage}%
+\end{figure}
+
+\begin{figure}[ht]
+\begin{minipage}[c]{0.4\columnwidth}
+\includegraphics[width=\linewidth]{nlpkkt160.png}
+\caption{\texttt{nlpkkt160}}
+\end{minipage}
+\hfill
+\begin{minipage}[c]{0.4\columnwidth}
+\includegraphics[width=\linewidth]{Queen_4147.png}
+\caption{\texttt{Queen\_4147}}
+\end{minipage}%
+\end{figure}
 
 \subsection{Experimental Set-up}
 % Explain the benchmark metrics and all the experimental set-up (warm-up cycles, number of performed runs\dots).
 
-For every matrix I measured a set of metrics using an approach similar to the first deliverable. For every matrix I spawned a job which ran multiple times every kernel and gathered info about the performances. The metrics measured were: execution time, peak GFLOP/s developed and peak bandwidth used. I was able to test all the algorithms in a single job since I switched to the node \emph{edu02}, which is equipped with the more powerful NVidia L40s, w.r.t. \emph{edu01} which is equipped with NVidia A30.
+For every matrix I measured a set of metrics using an approach similar to the first deliverable. For every matrix I spawned a job which ran multiple times every kernel and gathered info about the performances. All the metrics were averaged used the geometric mean and were: average execution time, average peak GFLOP/s developed and average bandwidth used. I was able to test all the algorithms in a single job since I switched to the node \emph{edu02}, which is equipped with the more powerful NVidia L40s, w.r.t. \emph{edu01} which is equipped with NVidia A30.
 
-Every job carried out its measurements performing multiple runs of the same kernel. The kernel tests were split into two period, a warm-up period and a ``valid'' period, the data has been collected only during the ``valid'' period. The distinction were necessary in order to war-up the GPU caches.
+Every job carried out its measurements performing multiple runs of the same kernel. The kernel tests were split into two period, a warm-up period and a ``valid'' period, the data has been collected only during the ``valid'' period. The distinction were necessary in order to war-up the GPU caches. I decided to keep this warm-up cycles even though a later analysis with \emph{nsys} highlighted the fact that even after a single ran the execution time stabilises.
 
-To automatise the matrix parsing, and their conversion in binary format, I used a fork of \texttt{distributed\_mmio}\footnote{The fork author is Matteo Di Noia \url{https://github.com/matteo-dinoia/distributed_mmio} while I just fixed some minor issues \url{https://github.com/elblasco/distributed_mmio}}.
+To automatise the matrix parsing, and their conversion in binary format, I used a fork of \texttt{distributed\_mmio}. Me and my colleague \emph{Matteo Di Noia} forked the original repo to fix a bug in the binary conversion of symmetric matrices. The repository is available on his \href{https://github.com/matteo-dinoia/distributed_mmio}{\emph{GitHUb profile}}.
 
-The job submission were managed by \emph{SbatchMan}, this automation allowed me to create multiple experiments and submit all of them. In  particular I created an experiment for normal metrics gathering and an experiment for profiling via \emph{nsys}, \emph{ncu} and \emph{nvtx}.
+The job submission were managed by \emph{SbatchMan}, this automation allowed me to create multiple experiments and submit all of them. In  particular I created an experiment for normal metrics gathering and an experiment for profiling via \emph{nsys} and \emph{ncu}; to both profilers \emph{nvtx} was added to increment the readability.
 
 \section{Experimental Results}\label{sec:result}
 % Present and discuss results. Include plots and tables when required (like Figure \ref{fig:enter-label}). Do not simply describe the figures; criticise the achieved results by underlining how they confirm/differ from the expected outcomes described in Section \ref{sec:methodology}.
 \begin{figure}[ht]
     \centering
-    \includegraphics[width=0.95\linewidth]{average-execution-time.png}
-    \caption{Average Execution Time (lower is better)}
-    \label{fig:avg-exec-time}
+    \includesvg[width=0.95\linewidth]{baseline-ms.svg}
+    \caption{Execution time (ms) for the baseline kernel (lower is better)}
+    \label{fig:avg-exec-time-baseline}
 \end{figure}
 
 \begin{figure}[ht]
     \centering
-    \includegraphics[width=0.95\linewidth]{average-gflop.png}
-    \caption{Average GFLOP/s Developed (lower is better)}
+    \includesvg[width=0.95\linewidth]{warp-ms.svg}
+    \caption{Execution time (ms) for the warp level kernel (lower is better)}
+    \label{fig:avg-exec-time-warp}
+  \end{figure}
+
+\begin{figure}[ht]
+    \centering
+    \includesvg[width=0.95\linewidth]{warp-unroll-ms.svg}
+    \caption{Execution time (ms) for the warp level kernel with unroll (lower is better)}
+    \label{fig:avg-exec-time-warp-unroll}
+  \end{figure}
+
+\begin{figure}[ht]
+    \centering
+    \includesvg[width=0.95\linewidth]{share-ms.svg}
+    \caption{Execution time (ms) for the share memory kernel (lower is better)}
+    \label{fig:avg-exec-time-share}
+  \end{figure}
+
+\begin{figure}[ht]
+    \centering
+    \includesvg[width=0.95\linewidth]{warp-unroll-gflop.svg}
+    \caption{Average GFLOP/s developed by the warp level kernel with unroll (higher is better)}
     \label{fig:avg-gflop}
-\end{figure}
-As expected in~\Cref{sec:methodology} and shown in~\Cref{fig:avg-exec-time, fig:avg-gflop},~\Cref{alg:striding} is faster than all the other implementations.
-\begin{figure}[ht]
-    \centering
-    \includegraphics[width=0.95\linewidth]{gflop-block.png}
-    \caption{GFLOP Compared The Number Of Threads Per Block}
-    \label{fig:gflop-block}
-\end{figure}
+  \end{figure}
 
 \begin{figure}[ht]
     \centering
-    \includegraphics[width=0.95\linewidth]{gb-block.png}
-    \caption{GB/s Compared The Number Of Threads Per Block}
-    \label{fig:gb-block}
-\end{figure}
-I decided to dig a bit more into the performances of~\Cref{alg:striding} by changing the maximum amount of thread per block. Starting from the base of 512 threads I divided by 2 until reaching 32, i.e., the size of warp. The optimal amount of threads per block resulted to be 256. This is due to the use of an atomic instruction within the code, the semantic of the instruction make concurrent write over the same address sequential; in this case if two threads are working on the same row their sum operations will sequentialised since they are trying to write on the same result address. Using less threads,.i.e., each thread works on more elements; conflicts (threads working) on the same row are reduced to a minimum. However, this minimum is not stable, in fact decreasing again the value to 128, 64 or 32 the performances decreases again, this could be symptom of either:
-\begin{itemize}
-\item too few threads working, so an excessive workload for each of them;
-\item too much threads working on the same row, hence an high number of conflicts on the same row.
-\end{itemize}
-Unfortunately, I was not able to determine a more fine grain optimisation, since the optimal size depends on the input matrix shape. \Cref{fig:gflop-block, fig:gb-block} highlights the fact that the variations of performances are not constant over all the matrices considered.
+    \includesvg[width=0.95\linewidth]{warp-unroll-gb.svg}
+    \caption{Average GB/s developed by the warp level kernel with unroll (higher is better)}
+    \label{fig:avg-warp-unroll-gb}
+  \end{figure}
+
+  \begin{figure}[ht]
+    \centering
+    \includesvg[width=0.95\linewidth]{share-gb.svg}
+    \caption{Average GB/s developed by the share memory kernel (higher is better)}
+    \label{fig:avg-share-gb}
+  \end{figure}
+  
+As mentioned in~\Cref{sec:system-description} \emph{ncu} caused several problems in the cluster so my analysis is restricted only to the metrics computed using \emph{CUDA} events to keep track of time. Even \emph{nsys} has not been very helpful since it does not provide this kind of insights about the kernel performances. 
+  
+I experimented for all the kernels with various sizes of grid a block, however for the sake of brevity I did not print the GFLOP/s and GB/s charts for all the kernels. Overall the charts for the GFLOP/s developed respect the same evolution of~\Cref{fig:avg-exec-time-baseline,fig:avg-exec-time-warp,fig:avg-exec-time-warp-unroll,fig:avg-exec-time-share}. As can be seen the best performances are yielded by block size between 512 and 256 threads. This is because if we use less thread per block these fewer threads will be overloaded with an excessive workload, that can be parallelised using the strategies described in~\Cref{sec:algorithms}.
+
+\Cref{fig:avg-exec-time-baseline,fig:avg-exec-time-warp,fig:avg-exec-time-warp-unroll,fig:avg-exec-time-share} highlight how the kernel with the fastest execution time is, on average, the kernel which exploit shared memory. However this is not always the case since it perform lesser read and write on the global memory it has a lower bandwidth, as showed in~\Cref{fig:avg-warp-unroll-gb,fig:avg-share-gb}.
+
+Despite not having access to \emph{ncu} I gained some intuitions regarding possible optimisations for the algorithms presented. First and foremost in~\Cref{alg:warp} the access pattern can be drastically improved by assigning to every block (and by extension to every warp) the next adjacent chunk of the matrix.
+% I decided to dig a bit more into the performances of~\Cref{alg:striding} by changing the maximum amount of thread per block. Starting from the base of 512 threads I divided by 2 until reaching 32, i.e., the size of warp. The optimal amount of threads per block resulted to be 256. This is due to the use of an atomic instruction within the code, the semantic of the instruction make concurrent write over the same address sequential; in this case if two threads are working on the same row their sum operations will sequentalized since they are trying to write on the same result address. Using less threads,.i.e., each thread works on more elements; conflicts (threads working) on the same row are reduced to a minimum. However, this minimum is not stable, in fact decreasing again the value to 128, 64 or 32 the performances decreases again, this could be symptom of either:
+% \begin{itemize}
+% \item too few threads working, so an excessive workload for each of them;
+% \item too much threads working on the same row, hence an high number of conflicts on the same row.
+% \end{itemize}
+% Unfortunately, I was not able to determine a more fine grain optimisation, since the optimal size depends on the input matrix shape. \Cref{fig:gflop-block, fig:gb-block} highlights the fact that the variations of performances are not constant over all the matrices considered.
 
 \begin{figure}[ht]
 \centering
@@ -287,17 +394,17 @@ Unfortunately, I was not able to determine a more fine grain optimisation, since
     grid=both,
     xmin=0.01, xmax=1500,
     ymin=1, ymax=200000,
-    xtick={0.01, 0.1, 1, 10, 100, 1000},
+    xtick={1, 10, 100, 1000},
     ytick={1, 10, 100, 1000, 10000}
 ]
 
 
 % --- Parameters ---
-\def\ridgepoint{5.57}     % FLOPs/Byte
+\def\ridgepoint{106.01}     % FLOPs/Byte
 \def\peakcompute{91600}    % GFLOPs
 \def\bandwidth{864}       % GB/s
-\def\ArithmeticIntensity{0.05}
-\def\performance{46.65}
+\def\ArithmeticIntensity{0.3} % 6 / (4 * 5)
+\def\performance{259.2} %ArithmeticIntensity * bandwidth
 
 % --- Roofline: Memory-bound and compute-bound ---
 \addplot[
@@ -325,7 +432,7 @@ Unfortunately, I was not able to determine a more fine grain optimisation, since
     mark size=2pt,
     color=blue
 ] coordinates {(\ArithmeticIntensity, \performance)};
-\node[align=left, anchor=west, blue] at (axis cs:0.06, 70) {Measured\\AI=0.05, Perf=46.65};
+\node[align=left, anchor=west, blue] at (axis cs:0.06, 70) {Measured\\AI=0.3, Perf=259.2};
 
 % --- Peak compute line (green dashed) ---
 \addplot[dashed, green!70!black, thick] coordinates {(0.01, \peakcompute) (1000, \peakcompute)};
@@ -337,19 +444,84 @@ Unfortunately, I was not able to determine a more fine grain optimisation, since
 
 \end{loglogaxis}
 \end{tikzpicture}
-\caption{Roofline Model For SpMV On NVIDIA L40s}
-\label{fig:roofline}
+\caption{Roofline model for~\Cref{alg:warp} with unroll on NVIDIA L40s}
+\label{fig:roofline-01}
 \end{figure}
 
-Following the NVIDIA's white-paper for the A30, I drew the roofline model for single precision floating point, since in my code I used \texttt{float} as data type to represent values within the matrix and vectors. \Cref{fig:roofline} highlights the fact that my \emph{CUDA} kernels are indeed a memory bounded.
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}
+\begin{loglogaxis}[
+    width=\linewidth,
+    height=7cm,
+    xlabel={Arithmetic Intensity [FLOPs/Byte]},
+    ylabel={Performance [GFLOPs]},
+    %title={Roofline Model for NVIDIA L40s GPU (FP32)},
+    grid=both,
+    xmin=0.01, xmax=1500,
+    ymin=1, ymax=200000,
+    xtick={1, 10, 100, 1000},
+    ytick={1, 10, 100, 1000, 10000}
+]
+
+
+% --- Parameters ---
+\def\ridgepoint{106.01}     % FLOPs/Byte
+\def\peakcompute{91600}    % GFLOPs
+\def\bandwidth{864}       % GB/s
+\def\ArithmeticIntensity{0.125} % 3 / (4 * 6)
+\def\performance{108} %ArithmeticIntensity * bandwidth
+
+% --- Roofline: Memory-bound and compute-bound ---
+\addplot[
+    domain=0.01:\ridgepoint,
+    samples=200,
+    thick,
+    orange
+] {\bandwidth * x}; % Memory-bound line
+
+\addplot[
+    domain=\ridgepoint:1000,
+    samples=2,
+    thick,
+    orange
+] {\peakcompute}; % Compute-bound line
+
+% --- Dashed Ridge point ---
+\addplot[dashed, red, thick] coordinates {(\ridgepoint, 1) (\ridgepoint, \peakcompute)};
+\node[red] at (axis cs:\ridgepoint + 7, 100) {Ridge Point};
+
+% --- Measured point ---
+\addplot[
+    only marks,
+    mark=*,
+    mark size=2pt,
+    color=blue
+] coordinates {(\ArithmeticIntensity, \performance)};
+\node[align=left, anchor=west, blue] at (axis cs:0.06, 70) {Measured\\AI=0.125, Perf=108};
+
+% --- Peak compute line (green dashed) ---
+\addplot[dashed, green!70!black, thick] coordinates {(0.01, \peakcompute) (1000, \peakcompute)};
+\node[anchor=south, green!50!black] at (axis cs:0.1, \peakcompute/2) {Peak Compute};
+
+% --- Annotations ---
+\node[blue] at (axis cs:0.15, 10) {Mem Bound Region};
+\node[blue] at (axis cs:100, \peakcompute + 15000) {Comp Bound Region};
+
+\end{loglogaxis}
+\end{tikzpicture}
+\caption{Roofline model for~\Cref{alg:share} on NVIDIA L40s}
+\label{fig:roofline-02}
+\end{figure}
+
+Following the NVIDIA's white-paper for the L40s, I drew the roofline model for single precision floating point, since in my code I used \texttt{float} as data type to represent values within the matrix and vectors. \Cref{fig:roofline-01,fig:roofline-02} highlights the fact that~\Cref{alg:warp} with unroll and~\Cref{alg:share} are indeed a memory bounded.
 
 \section{Conclusions}
-The presented algorithms are far from decent implementations. The representation used for the matrices is sub-optimal since the length of a row is unknown a priori, therefore it is impossible to do a decent load balancing between the threads. For better GPU performances using another representation such as CSR would works better.
+Without the help of \emph{ncu} has been difficult trying to extrapolate useful insights and improve the kernels. However even without these tools I am sure that exist better solutions. An example is the algorithm proposed by Belloch~\cite{blelloch1990vector}, which can be easily extended to array (COO encoded matrices), which sizes are not power of two. Although these kind of algorithms has to be modify in order to take into account the case in which two element can not be summed together or the case in which the result is not at the edges of a block/warp.
 
-Another bottleneck for the algorithm is represented by the use of an atomic instruction. Instead of this instruction thread/warp level synchronisation should be used.
+The test phase can also be improved as well, validation phase can be introduced. In this phase the results produced by an experimental kernel are compared against the results generated by a well know kernel to verify the correctness.
 
-On the CPU side, this representation is optimal since it permits to maximise the number of cache hits working on data stored so closely.
-
+Also, the comparison with the, currently in use, \emph{cuSPARSE} algorithms could represents a valuable benchmark metrics for the kernel created and presented.
 \bibliographystyle{IEEEtran}
 \bibliography{references}
 
