@@ -15,8 +15,8 @@ int main(int argc, char **argv) {
       Distr_MMIO_sorted_COO_local_read<IDX_TYPE, NUM_TYPE>(args.filename,
                                                            false);
 
-  // printf(GREEN "Now running the baseline" RESET "\n");
-  // test_spmv(coo_matrix, kernel_type::BASELINE);
+  printf(GREEN "Now running the baseline" RESET "\n");
+  test_spmv(coo_matrix, kernel_type::BASELINE);
 
   printf(GREEN "Now running the warp shuffle" RESET "\n");
   test_spmv(coo_matrix, kernel_type::WARP_SHFL);
@@ -24,8 +24,8 @@ int main(int argc, char **argv) {
   printf(GREEN "Now running the warp shuffle with unroll" RESET "\n");
   test_spmv(coo_matrix, kernel_type::WARP_SHFL_UNROLL);
 
-  // printf(GREEN "Now running the shared memory " RESET "\n");
-  // test_spmv(coo_matrix, kernel_type::SHARED_MEMORY_SUM);
+  printf(GREEN "Now running the shared memory " RESET "\n");
+  test_spmv(coo_matrix, kernel_type::SHARED_MEMORY_SUM);
 
   // printf(GREEN "Now running the cusprse default algorithm " RESET "\n");
   // fflush(stdout);

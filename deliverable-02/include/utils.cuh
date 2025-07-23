@@ -17,6 +17,7 @@
 #define NUM_TEST 5
 #define WARM_UP_RUN 5
 #define WARP_SIZE 32
+#define BANKS_NUM 32
 #define FULL_WARP_MASK 0xffffffff
 #define OPS_PER_NUN_BASELINE 2
 #define MEMEORY_RW_BASELINE 5
@@ -24,13 +25,15 @@
 #define MEMEORY_RW_WARP_SHFL 5
 #define OPS_PER_NUN_WARP_SHFL_UNROLL 6
 #define MEMEORY_RW_WARP_SHFL_UNROLL 5
+#define ELEM_PER_THREAD 2
+#define LOG_WARP 5
+#define BANKS_NUM_LOG 5
+#define CONFLICT_FREE_OFFSET(n)((n) >> BANKS_NUM + (n) >> (2 * BANKS_NUM_LOG))
 
 #define CEILING(X, Y) (((X) + (Y) - 1) / (Y))
-
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 #define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
-
-#define LOG_WARP log(WARP_SIZE)
+#define CONFLICT_FREE_OFFSET(n) ((n) >> BANKS_NUM + (n) >> (2 * BANKS_NUM_LOG))
 
 #define CHECK_CUDA(func)                                                       \
   {                                                                            \
@@ -98,6 +101,7 @@ enum kernel_type {
   WARP_SHFL,
   WARP_SHFL_UNROLL,
   SHARED_MEMORY_SUM,
+  SHARED_MEMORY_BANK,
   CUSPARSE
 };
 
@@ -179,10 +183,18 @@ void compute_results(const float *times, const float *flops,
 
 void populate_d_arrays(const COO_local<IDX_TYPE, NUM_TYPE> *sparse_matrix,
                        NUM_TYPE *d_vals, IDX_TYPE *d_rows, IDX_TYPE *d_cols) {
-  for (size_t i = 0; i < sparse_matrix->nnz; ++i) {
-    d_vals[i] = sparse_matrix->val[i];
-    d_rows[i] = sparse_matrix->row[i];
-    d_cols[i] = sparse_matrix->col[i];
+  if (sparse_matrix->val != nullptr) {
+    cudaMemset(d_vals, 1, sparse_matrix->nnz * sizeof(NUM_TYPE));
+    for (size_t i = 0; i < sparse_matrix->nnz; ++i) {
+      d_rows[i] = sparse_matrix->row[i];
+      d_cols[i] = sparse_matrix->col[i];
+    }
+  } else {
+    for (size_t i = 0; i < sparse_matrix->nnz; ++i) {
+      d_vals[i] = sparse_matrix->val[i];
+      d_rows[i] = sparse_matrix->row[i];
+      d_cols[i] = sparse_matrix->col[i];
+    }
   }
 }
 
